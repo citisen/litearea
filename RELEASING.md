@@ -4,11 +4,12 @@ The runbook for changing the library and getting it to users. For the *why*
 behind the setup (and what it does not protect against), see
 [PUBLISHING.md](PUBLISHING.md).
 
-The next version to ship is **0.2.0**, and `0.1.0` is already on the registry —
-`latest` points at it. It was published by hand, once, because a trusted
-publisher lives on the package's own settings page and a package that does not
-exist yet has no settings page. That bootstrap is done and is kept below as
-history: every release from here on goes through CI staging plus a human
+The current release is **0.2.0**, and it went out the way this document
+describes: a commit, a tag, a CI stage, and a human approval with 2FA. The one
+release that predates all of that is `0.1.0`, published by hand because a
+trusted publisher lives on the package's own settings page and a package that
+does not exist yet has no settings page. That bootstrap is done and is kept
+below as history — every release from here on goes through CI staging plus an
 approval, and a local `npm publish` failing is then the setup working rather
 than the setup broken.
 
@@ -24,7 +25,8 @@ npm run check
 # 3. bump the version
 npm version patch --no-git-tag-version   # or minor / major
 
-# 4. land it through a PR (main is protected — direct pushes are rejected)
+# 4. land it through a PR (the intended path; see step 4 for whether the branch
+#    rule is actually in force)
 git checkout -b feat/whatever
 git commit -am "Describe the change"
 git push -u origin feat/whatever
@@ -32,8 +34,8 @@ gh pr create --fill && gh pr merge --squash --delete-branch
 
 # 5. tag the merged commit, then stage
 git checkout main && git pull --ff-only
-git tag v0.2.0 && git push origin v0.2.0
-gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=0.2.0
+git tag v<version> && git push origin v<version>
+gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=<version>
 
 # 6. review, then approve (this is the only step that publishes)
 npm run release -- list                  # find the stage-id
@@ -44,10 +46,10 @@ npm run release -- approve <stage-id>
 npm view @citisen/litearea dist-tags
 ```
 
-The version in this loop is the one you just bumped to — here, `0.2.0`. The one
-release CI could not make is the first one, `0.1.0`, which was published by hand
-under [Bootstrapping the first release](#bootstrapping-the-first-release); that
-section is now history rather than a to-do.
+The version in this loop is the one you just bumped to. The one release CI could
+not make is the first one, `0.1.0`, which was published by hand under
+[Bootstrapping the first release](#bootstrapping-the-first-release); that section
+is now history rather than a to-do.
 
 ## Bootstrapping the first release
 
@@ -71,11 +73,12 @@ page. The sequence was:
    nothing local needs publish rights at all.
 
 3. Verify the OIDC path actually works by cutting the next release through CI
-   — a staged tarball that a human approves, with no token involved. **Done**:
-   the `0.2.0` stage reports `staged by: GitHub Actions (trusted automation)`,
-   which a configured-but-broken trusted publisher could not produce, because
-   the workflow deletes any `.npmrc` and unsets `NODE_AUTH_TOKEN`/`NPM_TOKEN`
-   before staging.
+   — a staged tarball that a human approves, with no token involved. **Done, end
+   to end**: the `0.2.0` stage reports `staged by: GitHub Actions (trusted
+   automation)`, which a configured-but-broken trusted publisher could not
+   produce, because the workflow deletes any `.npmrc` and unsets
+   `NODE_AUTH_TOKEN`/`NPM_TOKEN` before staging — and approving that stage is
+   what published `latest: 0.2.0`.
 
 4. Revoke the local token — **the one step still outstanding**. Until it is
    gone, `0.1.0` remains the only version this package published by hand, and a
@@ -192,8 +195,8 @@ OIDC exchange.
 ### 6. Review, then approve
 
 **Staging is not publishing.** After a successful run nothing is installable:
-`npm view @citisen/litearea version` still reports `0.1.0`, the current release.
-A human must approve, and npm gates that on 2FA.
+`npm view @citisen/litearea version` still reports the version already out, not
+the one you just staged. A human must approve, and npm gates that on 2FA.
 
 ```sh
 npm run release -- list                  # find the stage-id

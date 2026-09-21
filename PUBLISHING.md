@@ -74,12 +74,14 @@ published by hand, once, before any of the rest of this document could apply:
 
 Steps 3 and 4 are not self-certifying. Whether the trusted publisher is
 *configured* is a setting you can read; whether the OIDC exchange *works* is only
-demonstrated by a staging run that reaches `npm stage publish`. **Step 3 is
-done**: the `0.2.0` stage was created by `GitHub Actions (trusted automation)`
-with no token on the runner. Step 4 is the one still outstanding — until the
-local credential is revoked, `0.1.0` remains the only version this package
-published by hand, and the hand publish the only one nothing in this document
-had to protect.
+demonstrated by a staging run that reaches `npm stage publish`, and whether the
+approval gate works is only demonstrated by an approval. **Step 3 is done, all
+the way through**: the `0.2.0` stage was created by `GitHub Actions (trusted
+automation)` with no token on the runner, and approving it published the version —
+`npm view @citisen/litearea dist-tags` reads `latest: 0.2.0`. Step 4 is the one
+still outstanding: until the local credential is revoked, `0.1.0` remains the only
+version this package published by hand, and the hand publish the only one nothing
+in this document had to protect.
 
 ## One-time setup
 
