@@ -151,13 +151,19 @@ checks that with `git tag --points-at HEAD`.
 
 ### 4. Land it through a PR
 
-`main` is protected with `enforce_admins: true`, so **even you cannot push to it
-directly**. This is deliberate: the publishing grant trusts the repository, so
-push access effectively *is* publish access.
+Landing through a PR is the intended path, and the reason is not tidiness: the
+publishing grant trusts the repository, so push access effectively *is* publish
+access, and a required PR is what stops a direct push from being a silent
+release.
 
-Required approvals is 0, because GitHub will not let you approve your own PR; you
-can `gh pr merge --squash` your own work. Linear history is required, so squash
-or rebase rather than merge-commit.
+> **Not enforced yet.** `main` is currently unprotected — a direct push
+> succeeds. Apply branch protection (required PR, linear history, no force
+> pushes, no deletions, `enforce_admins: true`) before relying on this step; see
+> [PUBLISHING.md](PUBLISHING.md#one-time-setup).
+
+Once it is on, required approvals is 0, because GitHub will not let you approve
+your own PR, so you can `gh pr merge --squash` your own work. Linear history is
+required, so squash or rebase rather than merge-commit.
 
 ### 5. Tag, then stage
 
@@ -233,9 +239,12 @@ node -e "import('@citisen/litearea').then(m => console.log(Object.keys(m).length
 unpublishing only within 72 hours and discourages it; beyond that the version
 number is burned. If you ship something broken, publish a patch.
 
-**A pushed tag cannot be moved.** `allow_force_pushes` is off, and moving a tag
-would defeat the ancestry check anyway. Tagged a commit and then found a problem?
-Bump the version and tag again.
+**A pushed tag should not be moved.** Force pushes are off by default, and moving
+a tag would defeat the ancestry check anyway: the workflow matches a tag on the
+exact commit with `git tag --points-at HEAD`, so a moved tag describes a release
+of a commit no tag ever pointed at. Tagged a commit and then found a problem?
+Bump the version and tag again. (Until branch protection is applied, nothing
+technically refuses the move — this is a rule, not a lock.)
 
 **`dist/` is not committed, and nothing builds it on install.** There is no
 `prepare` script — the gate builds the library and the tarball carries the

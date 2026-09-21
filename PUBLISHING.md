@@ -43,10 +43,17 @@ at and approve.
 
 That human step is what holds the security boundary in practice, because trusted
 publishing moves the trust boundary from *whoever holds the token* to *whoever
-can push*. `main` is therefore protected like the sibling packages:
+can push*. `main` is therefore meant to be protected like the sibling packages:
 required PR, linear history, no force pushes, no deletions, and
 `enforce_admins: true` — so a mistaken direct push is refused for the maintainer
 too.
+
+> **Status: not applied yet.** As of `0.2.0` the branch is unprotected.
+> `gh api repos/citisen/litearea/branches/main/protection` answers
+> `Branch not protected` (404), and a direct push to `main` succeeds. Everything
+> below describes the intended design; until the rule is created in
+> *Settings → Branches*, the only thing standing between a push and a release is
+> the human approval of the stage.
 
 **The strongest configuration is all three: staging, a protected `main`, and a
 protected `npm-publish` environment.** The third one is opt-in (see below).
@@ -145,7 +152,32 @@ it for this package.
 Create an environment named `npm-publish` in *Settings → Environments* and add
 required reviewers. The workflow already references it; no edit is needed. GitHub
 also creates the environment on the first run, with no protection rules — which
-is why this step is worth doing deliberately.
+is why this step is worth doing deliberately. If the environment requires a
+reviewer, the staging run pauses there until someone approves it, and that
+approval is a second, separate gate from the stage approval.
+
+> Prefer this one over step 4 if you only want one gate: reviewers on the
+> environment are checked *before* the runner stages anything, whereas branch
+> protection only constrains who can write the commit.
+
+### 4. Protect `main`
+
+*Settings → Branches → Add branch protection rule* (or a repository ruleset) for
+`main`, with: require a pull request before merging, require linear history,
+block force pushes, block deletions, and — the one that matters — *Do not allow
+bypassing the above settings*, which is `enforce_admins: true`.
+
+**This is not applied on `@citisen/litearea` yet** (see the status note above).
+It is the step that makes the rest of this document structural rather than
+advisory: without it, anyone who can push to `main` can run the staging workflow
+on a commit they wrote, and the only remaining check is a human reading the
+stage. Worth checking from a terminal rather than by memory:
+
+```sh
+gh api repos/citisen/litearea/branches/main/protection
+```
+
+A 404 (`Branch not protected`) means it is still not on.
 
 ## Cutting a release
 
