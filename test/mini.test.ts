@@ -1,10 +1,11 @@
-// ─── mini-conf: the grammar the demo writes for itself ──────────────────────
+// ─── mini-conf: a grammar the demo writes for itself ────────────────────────
 //
-// `examples/demo/grammars/mini.ts` is the only grammar in this repository that a
-// demo owns rather than the library, and it is the one that exercises a region,
-// positional rules, a check, commit characters, and per-word hover docs. Nothing
-// imports it, so without this file a change to the engine could break it and the
-// breakage would only show up the next time somebody opened the demo.
+// `examples/demo/grammars/mini.ts` is one of the two grammars the demo owns
+// rather than the library (the other is `swatch.ts`, tested beside this file),
+// and it is the one that exercises a region, positional rules, a check, commit
+// characters, and per-word hover docs. Nothing in `src/` imports it, so without
+// this file a change to the engine could break it and the breakage would only
+// show up the next time somebody opened the demo.
 
 import { describe, expect, it } from 'vitest'
 import { complete, inspect } from '../src/index.js'

@@ -4,13 +4,13 @@ The runbook for changing the library and getting it to users. For the *why*
 behind the setup (and what it does not protect against), see
 [PUBLISHING.md](PUBLISHING.md).
 
-The next version to ship is **0.1.0**, and it has **never been published** —
-`@citisen/litearea` does not exist on the registry yet. `0.1.0` has to be
-published by hand once, before trusted publishing can be configured for it: a
-trusted publisher lives on the package's own settings page, and a package that
-does not exist yet has no settings page. Everything after that goes through CI
-staging plus a human approval, and a local `npm publish` failing is then the
-setup working rather than the setup broken.
+The next version to ship is **0.2.0**, and `0.1.0` is already on the registry —
+`latest` points at it. It was published by hand, once, because a trusted
+publisher lives on the package's own settings page and a package that does not
+exist yet has no settings page. That bootstrap is done and is kept below as
+history: every release from here on goes through CI staging plus a human
+approval, and a local `npm publish` failing is then the setup working rather
+than the setup broken.
 
 ## The short version
 
@@ -32,8 +32,8 @@ gh pr create --fill && gh pr merge --squash --delete-branch
 
 # 5. tag the merged commit, then stage
 git checkout main && git pull --ff-only
-git tag v0.1.1 && git push origin v0.1.1
-gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=0.1.1
+git tag v0.2.0 && git push origin v0.2.0
+gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=0.2.0
 
 # 6. review, then approve (this is the only step that publishes)
 npm run release -- list                  # find the stage-id
@@ -44,27 +44,24 @@ npm run release -- approve <stage-id>
 npm view @citisen/litearea dist-tags
 ```
 
-The version in this loop is `0.1.1`, not `0.1.0`: the first release predates
-trusted publishing and is the one thing here that CI cannot do. See
-[Bootstrapping the first release](#bootstrapping-the-first-release).
+The version in this loop is the one you just bumped to — here, `0.2.0`. The one
+release CI could not make is the first one, `0.1.0`, which was published by hand
+under [Bootstrapping the first release](#bootstrapping-the-first-release); that
+section is now history rather than a to-do.
 
 ## Bootstrapping the first release
 
-*Not yet done — the package has never been published, and this is the one
-paragraph that differs from a package that has been out for a while.* Trusted
-publishing is configured on a package's **own settings page**, so the first
-version has to be published by hand:
+**Done** — kept because it is the one release the CI path cannot make, and the
+one place a local credential was ever needed. `0.1.0` is on the registry. It had
+to be published by hand, because trusted publishing is configured on a package's
+**own settings page**, and a package that does not exist yet has no settings
+page. The sequence was:
 
-1. Publish `0.1.0` locally with your 2FA:
+1. `npm login`, then `npm run check`, then `npm publish` — that put `0.1.0` on
+   the registry with 2FA.
 
-   ```sh
-   npm login
-   npm run check
-   npm publish
-   ```
-
-   `publishConfig.access` in `package.json` is already `public`, so there is no
-   `--access` flag to remember. The `prepublishOnly` hook runs `npm run check`
+   `publishConfig.access` in `package.json` is already `public`, so there was no
+   `--access` flag to remember. The `prepublishOnly` hook ran `npm run check`
    again on the way out, which is deliberate: a hand publish is the one path
    with no CI gate in front of it, so the gate is attached to the command
    instead.
@@ -73,10 +70,15 @@ version has to be published by hand:
    [PUBLISHING.md](PUBLISHING.md#one-time-setup). From then on, CI can stage and
    nothing local needs publish rights at all.
 
-3. Verify the OIDC path actually works by cutting `0.1.1` through steps 3–6 above
-   — a staged tarball that a human approves, with no token involved.
+3. Verify the OIDC path actually works by cutting the next release through CI
+   — a staged tarball that a human approves, with no token involved. **This is
+   the step that is not yet proven**: a *configured* trusted publisher says
+   nothing about whether the exchange works, so the first staging run is the
+   proof, not the settings page.
 
-Keep the local token only until step 3 has succeeded, then revoke it.
+4. Revoke the local token, once step 3 has succeeded. Until it does, `0.1.0`
+   remains both the only version this package has ever published and the only
+   one that bypassed CI.
 
 ## Step detail
 
@@ -160,8 +162,8 @@ or rebase rather than merge-commit.
 ### 5. Tag, then stage
 
 ```sh
-git tag v0.1.1 && git push origin v0.1.1
-gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=0.1.1
+git tag v0.2.0 && git push origin v0.2.0
+gh workflow run stage.yml --ref main -f dist-tag=latest -f confirm=0.2.0
 ```
 
 The `confirm` input must equal `package.json`'s version exactly — it exists to
@@ -183,9 +185,8 @@ OIDC exchange.
 ### 6. Review, then approve
 
 **Staging is not publishing.** After a successful run nothing is installable:
-`npm view @citisen/litearea version` still reports the previous release, or a 404
-while the package has never been published at all. A human must approve, and npm
-gates that on 2FA.
+`npm view @citisen/litearea version` still reports `0.1.0`, the current release.
+A human must approve, and npm gates that on 2FA.
 
 ```sh
 npm run release -- list                  # find the stage-id
@@ -222,7 +223,7 @@ npm actually served:
 mkdir -p /tmp/litearea-scratch && cd /tmp/litearea-scratch
 npm init -y >/dev/null
 npm install @citisen/litearea
-ls node_modules/@citisen/litearea/dist   # index.js, index.cjs, index.d.ts, react.*, grammars.*, styles.css
+ls node_modules/@citisen/litearea/dist   # index.js, index.cjs, react.*, styles.*, styles.css, types/
 node -e "import('@citisen/litearea').then(m => console.log(Object.keys(m).length, 'exports'))"
 ```
 

@@ -20,6 +20,12 @@
  * 4. **Auto-sizing.** Whether a box has a scrollbar is `scrollHeight` against
  *    `clientHeight`, measured after a real layout.
  *
+ * The checks are about the ENGINE, so the language they run against is a FIXTURE
+ * defined inside the checklist itself. The package ships no syntax and no grammar
+ * to import: a harness that borrowed a real DSL would be checking that DSL rather
+ * than the artifact this exists to check, and proving a particular product DSL
+ * belongs beside the plugin that owns it.
+ *
  * Usage:
  *   node scripts/browser-check.mjs [path/to/chrome]
  *
@@ -88,20 +94,20 @@ if (browser === undefined) {
  * The page is opened over `file://`, and Chromium refuses to fetch an ES module from
  * a file URL — so the library is bundled to an IIFE and inlined. The entry is built
  * from the SHIPPED files rather than from `src/`, so what this check drives is the
- * artifact a host would actually install.
+ * artifact a host would actually install — and it is the root entry ALONE, because
+ * that is all the package publishes.
  * @returns the script source.
  */
 async function bundle() {
   const index = join(root, 'dist', 'index.js')
-  const grammars = join(root, 'dist', 'grammars.js')
-  if (!existsSync(index) || !existsSync(grammars)) {
+  if (!existsSync(index)) {
     console.error('browser-check: dist/ is missing; run `npm run build` first')
     process.exit(1)
   }
   const { build } = await import('esbuild')
   const result = await build({
     stdin: {
-      contents: `export * from ${JSON.stringify(index)}\nexport * from ${JSON.stringify(grammars)}\n`,
+      contents: `export * from ${JSON.stringify(index)}\n`,
       resolveDir: root,
       sourcefile: 'litearea-browser-entry.js',
       loader: 'js',
@@ -156,12 +162,57 @@ const CHECKLIST = String.raw`
         field.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }))
       }
 
-      const sentry = api.dshSentryStyleGrammar()
-      const font = api.dshFontQueryGrammar({
-        catalogue: ['Inter', 'IBM Plex Mono', 'Geist Mono', 'Fira Code'],
-        enumerated: true,
-        styles: { 'Geist Mono': ['Regular', 'Medium', 'Bold'] },
-        shippedWeight: 400,
+      // ── the fixture grammar ─────────────────────────────────────────────
+      // The package ships no syntax, so the checklist defines the language it
+      // drives. This is a FIXTURE and not a product DSL: one closed vocabulary,
+      // three rules, one completion source, and it is published nowhere. The two
+      // checks that need a differently-shaped grammar — the naive one in section
+      // 10 and the bulky one in section 8 — define their own, for the same reason.
+      const SHAPES = api.defineVocabulary({
+        id: 'shape',
+        words: ['circle', 'square', 'rounded'],
+        scope: 'shape',
+        unknownMessage: '"{word}" is not a shape — expected {allowed}.',
+        docs: {
+          circle: { detail: 'a disc', body: 'Fixture documentation for circle.' },
+          square: { detail: 'four corners', body: 'Fixture documentation for square.' },
+          rounded: { detail: 'a rounded box', body: 'Fixture documentation for rounded.' },
+        },
+      })
+
+      const fixture = api.defineGrammar({
+        id: 'browser-fixture',
+        name: 'browser fixture',
+        rules: [
+          // The number rule sits ABOVE the vocabulary: digits are word characters,
+          // so a words rule placed first would swallow and reject them.
+          { kind: 'match', scope: 'keyword', pattern: /draw|fill/ },
+          { kind: 'match', scope: 'number', pattern: /\d+(?:\.\d+)?/ },
+          { kind: 'words', words: SHAPES, unknown: {} },
+        ],
+        compose: [
+          {
+            id: 'shape',
+            range: (context) => context.word,
+            items: (context) => {
+              const written = context.text.slice(0, context.caret)
+              return ['circle', 'square', 'rounded'].map((shape) => {
+                // A shape the document already uses leads the list, which is what
+                // sortText is for: the ranking must put that group first without
+                // pretending its label starts with a zero.
+                const used = written.indexOf(shape) >= 0
+                return {
+                  label: shape,
+                  append: ' ',
+                  kind: 'shape',
+                  detail: SHAPES.entryFor(shape)?.detail,
+                  documentation: SHAPES.entryFor(shape)?.body,
+                  sortText: used ? '0' : '1',
+                }
+              })
+            },
+          },
+        ],
       })
 
       ;(async () => {
@@ -169,7 +220,7 @@ const CHECKLIST = String.raw`
         check(typeof api.createEditor === 'function', 'the bundle did not expose createEditor')
 
         // ── 1. the layer reproduces the document, and lines up with it ──────
-        const one = mount(sentry, 'running  circle  blue  turn   3')
+        const one = mount(fixture, 'draw  circle  fill  rounded  10')
         const paint = paintOf(one)
         check(
           paint.textContent === one.input.value,
@@ -190,7 +241,7 @@ const CHECKLIST = String.raw`
         // screen: a stylesheet rule of higher specificity once set text-decoration on every
         // painted span, which quietly switched off every squiggle in the library. Nothing in
         // the DOM reveals that, so the only honest check is the browser's own computed style.
-        const marked = mount(sentry, 'running  bogus  blue')
+        const marked = mount(fixture, 'draw bogus 10')
         const markedSpans = [...marked.element.querySelectorAll('.litearea-paint > span')]
         const flaggedSpan = markedSpans.find((span) => span.className.indexOf('litearea-diag-error') >= 0)
         check(flaggedSpan !== undefined, 'a rejected word must carry a severity class')
@@ -220,14 +271,14 @@ const CHECKLIST = String.raw`
         // is the first thing a host asks about, so it is measured rather than asserted in prose.
         // Georgia is chosen precisely because it is unlike the default in every metric.
         const themed = mount(
-          sentry,
-          'running  circle  blue  turn   3\nwaiting rounded amber blink 1.1',
+          fixture,
+          'draw circle 10\nfill square 20',
           {
             variables: {
               font: 'Georgia, Times New Roman, serif',
               'font-size': '15px',
               'line-height': '26px',
-              'scope-state': '#b91c1c',
+              'scope-keyword': '#b91c1c',
               accent: '#c2410c',
             },
           },
@@ -253,8 +304,8 @@ const CHECKLIST = String.raw`
           'a themed layer must still reproduce the document',
         )
         const themedState = [...themed.element.querySelectorAll('.litearea-paint > span')]
-          .find((span) => span.className.indexOf('litearea-scope-state') >= 0)
-        check(themedState !== undefined, 'the themed document must have a state token')
+          .find((span) => span.className.indexOf('litearea-scope-keyword') >= 0)
+        check(themedState !== undefined, 'the themed document must have a keyword token')
         if (themedState !== undefined) {
           check(
             getComputedStyle(themedState).color === 'rgb(185, 28, 28)',
@@ -280,10 +331,10 @@ const CHECKLIST = String.raw`
             ' > ' + one.input.clientHeight + ')',
         )
         const oneLine = one.input.offsetHeight
-        one.setValue('running circle blue turn 3\nwaiting rounded amber blink 1.1\ndone circle green flush 1.6', true)
+        one.setValue('draw circle 10\nfill square 20\ndraw rounded 30', true)
         const threeLines = one.input.offsetHeight
         check(threeLines > oneLine, 'more lines must grow the box (was ' + oneLine + ', now ' + threeLines + ')')
-        one.setValue('running circle blue turn 3', true)
+        one.setValue('draw circle 10', true)
         const backToOne = one.input.offsetHeight
         check(
           Math.abs(backToOne - oneLine) <= 1,
@@ -292,8 +343,8 @@ const CHECKLIST = String.raw`
 
         // ── 3. a maximum height clamps the box and introduces a scrollbar ───
         const clamped = mount(
-          sentry,
-          'running circle blue turn 3\nwaiting rounded amber blink 1.1\ndone circle green flush 1.6\napproval rounded amber blink 1.9',
+          fixture,
+          'draw circle 1\nfill square 2\ndraw rounded 3\nfill circle 4',
           { sizing: { maxRows: 2 } },
         )
         check(
@@ -333,22 +384,22 @@ const CHECKLIST = String.raw`
         notes.push('control: a direct value assignment is not undoable, as expected')
 
         // ── 5. undo and redo survive a completion ──────────────────────────
-        const undoable = mount(sentry, '')
+        const undoable = mount(fixture, '')
         undoable.focus()
-        document.execCommand('insertText', false, 'runn')
+        document.execCommand('insertText', false, 'rou')
         check(
-          undoable.value === 'runn',
+          undoable.value === 'rou',
           'typing through the editing pipeline must land (value is ' + JSON.stringify(undoable.value) + ')',
         )
         check(
           undoable.currentCompletion !== undefined,
-          'typing a state prefix must open the completion list',
+          'typing a shape prefix must open the completion list',
         )
         check(rowsOf(undoable).length > 0, 'the completion list must render rows')
         const beforeCompletion = undoable.value
         press(undoable.input, 'Enter')
         check(
-          undoable.value.indexOf('running') === 0,
+          undoable.value.indexOf('rounded') === 0,
           'Enter must accept the highlighted completion (value is ' + JSON.stringify(undoable.value) + ')',
         )
         check(
@@ -381,7 +432,7 @@ const CHECKLIST = String.raw`
         // letter — so accepting the suggestion produced the completion followed by the
         // leftover character. Every character must be typed SEPARATELY here, so that the list
         // is filtered once per keystroke exactly as a person would drive it.
-        const grown = mount(sentry, '')
+        const grown = mount(fixture, '')
         grown.focus()
         document.execCommand('insertText', false, 'r')
         check(grown.currentCompletion !== undefined, 'the first letter must open the list')
@@ -394,26 +445,28 @@ const CHECKLIST = String.raw`
         )
         press(grown.input, 'Enter')
         check(
-          grown.value === 'running ',
+          grown.value === 'rounded ',
           'accepting after two letters must replace BOTH of them (got ' + JSON.stringify(grown.value) + ')',
         )
 
         // The same thing with a longer word and a middle-of-document caret, because the
-        // off-by-one is easiest to miss when the range is not anchored at zero.
-        const midword = mount(sentry, 'running circle blue turn 3\nwaiting rounded amber blink 1.1')
+        // off-by-one is easiest to miss when the range is not anchored at zero. The
+        // inserted letters are a subsequence of the word rather than its next letters, so
+        // the row is still offered and the replacement has to cover everything typed.
+        const midword = mount(fixture, 'draw circle 1\nrounded square 2')
         midword.focus()
-        const lineStart = midword.input.value.indexOf('waiting')
+        const lineStart = midword.input.value.indexOf('rounded')
         midword.setSelection(lineStart + 1)
-        document.execCommand('insertText', false, 'ai')
+        document.execCommand('insertText', false, 'ou')
         press(midword.input, 'Enter')
         check(
-          midword.input.value.split('\n')[1] === 'waiting rounded amber blink 1.1',
+          midword.input.value.split('\n')[1] === 'rounded square 2',
           'completing a word in the middle of a document must leave no debris (line is ' +
             JSON.stringify(midword.input.value.split('\n')[1]) + ')',
         )
 
         // ── 7. a repaint does not move the caret ───────────────────────────
-        const careful = mount(sentry, 'running  circle  blue  turn  3\nwaiting rounded amber blink 1.1')
+        const careful = mount(fixture, 'draw  circle  fill  rounded  10\nfill square 20')
         careful.focus()
         const at = careful.input.value.indexOf('rounded')
         careful.setSelection(at)
@@ -435,7 +488,7 @@ const CHECKLIST = String.raw`
         )
 
         // ── 7. the list opens, navigates, and dismisses ─────────────────────
-        const listed = mount(sentry, 'running ')
+        const listed = mount(fixture, 'draw ')
         listed.focus()
         listed.setSelection(listed.input.value.length)
         listed.showCompletions()
@@ -470,7 +523,7 @@ const CHECKLIST = String.raw`
         // row rather than the scrollbar, so a keyboard user never saw it, and a mouse user had
         // to scroll down to read it and back up to reach the next row. The fix is positional, so
         // this asks the layout rather than the DOM.
-        const bulky = litearea.defineGrammar({
+        const bulky = api.defineGrammar({
           id: 'bulky',
           rules: [{ kind: 'match', scope: 'word', pattern: /[a-z]+/ }],
           wordChars: /[\p{L}]/u,
@@ -540,10 +593,10 @@ const CHECKLIST = String.raw`
         }
 
         // ── 9. the tooltip explains a problem ───────────────────────────────
-        const hovered = mount(sentry, 'running  bogus  blue', { hover: { enabled: true, delay: 0 } })
+        const hovered = mount(fixture, 'draw bogus 10', { hover: { enabled: true, delay: 0 } })
         const flagged = [...hovered.element.querySelectorAll('.litearea-paint > span')]
           .find((span) => span.className.indexOf('litearea-diag-') >= 0)
-        check(flagged !== undefined, 'an unknown state must be underlined')
+        check(flagged !== undefined, 'an unknown shape must be underlined')
         if (flagged !== undefined) {
           const box = flagged.getBoundingClientRect()
           hovered.input.dispatchEvent(new MouseEvent('mousemove', {
@@ -567,19 +620,42 @@ const CHECKLIST = String.raw`
           check(tip.dataset.open === 'false', 'leaving the field must close the tooltip')
         }
 
-        // ── 9. the font grammar works in a browser too ─────────────────────
-        const fonts = mount(font, 'Geist Mono m')
-        fonts.focus()
-        fonts.setSelection(fonts.input.value.length)
-        fonts.showCompletions()
-        const fontRows = [...rowsOf(fonts)].map((row) => row.textContent)
+        // ── 9b. the fixture's own completion offers its own vocabulary ─────
+        // This replaced a check that drove the dsh-font DSL in a browser. Proving
+        // that a particular product DSL works is the plugin's job and not the
+        // library's: a DSL belongs beside the plugin that owns it. What is left is
+        // the engine claim the old check was reaching for — rows carry an append
+        // and a sortText, and the list honours both.
+        const offered = mount(fixture, 'draw circle 1\nfill ')
+        offered.focus()
+        offered.setSelection(offered.input.value.length)
+        offered.showCompletions()
         check(
-          fontRows.some((label) => label.indexOf('medium') >= 0),
-          'the font grammar must offer Geist Mono weights (got ' + JSON.stringify(fontRows.slice(0, 6)) + ')',
+          rowsOf(offered).length === 3,
+          'the fixture completion must offer its whole vocabulary (got ' + rowsOf(offered).length + ')',
         )
+        const offeredState = offered.currentCompletion
+        check(offeredState !== undefined, 'showCompletions must open the list over an empty word')
+        if (offeredState !== undefined) {
+          const firstRow = offeredState.rows[0]
+          check(
+            firstRow !== undefined && firstRow.item.sortText === '0',
+            'A ROW THAT LEADS BY sortText MUST LEAD THE LIST (got ' +
+              JSON.stringify(firstRow === undefined ? null : firstRow.item.label) + ')',
+          )
+          check(
+            firstRow !== undefined && firstRow.item.label === 'circle',
+            'the shape the document already uses must be offered first (got ' +
+              JSON.stringify(firstRow === undefined ? null : firstRow.item.label) + ')',
+          )
+          check(
+            offeredState.rows.some((row) => row.item.append === ' '),
+            'a row must carry the append a host would type next',
+          )
+        }
         check(
-          paintOf(fonts).textContent === 'Geist Mono m',
-          'the font layer must reproduce the query',
+          paintOf(offered).textContent === offered.input.value,
+          'the fixture layer must reproduce the document it is showing a list over',
         )
 
         // ── 10. resting on blank space must explain nothing ────────────────
@@ -589,10 +665,10 @@ const CHECKLIST = String.raw`
         // an implementation detail and not an explanation of anything.
         //
         // The grammar here is naive ON PURPOSE: it describes every token it is handed, including
-        // whitespace. Testing this against one of the reference grammars would prove nothing,
-        // because both of them happen to stay quiet about a scope they have no documentation
-        // for — the check has to exercise the ENGINE's refusal to ask, not a grammar's manners.
-        const naive = litearea.defineGrammar({
+        // whitespace. Testing this against a grammar that happens to stay quiet about a scope it
+        // has no documentation for would prove nothing — the check has to exercise the ENGINE's
+        // refusal to ask, not a grammar's manners.
+        const naive = api.defineGrammar({
           id: 'naive',
           rules: [{ kind: 'match', scope: 'word', pattern: /[a-z]+/ }],
           describe: (context) =>
@@ -665,6 +741,9 @@ const CHECKLIST = String.raw`
             document.querySelectorAll('style[data-litearea-styles]').length + ')',
         )
 
+        // A host's own write at the very end: it must be accepted without throwing,
+        // and it is deliberately not a check, because a direct assignment is exactly
+        // what the control above proved the pipeline does not record.
         const edits = one.input.value
         one.input.value = edits
 

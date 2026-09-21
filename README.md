@@ -59,14 +59,16 @@ So this library makes the opposite choices, and each one is load-bearing:
 npm install @citisen/litearea
 ```
 
-Three entry points and one stylesheet:
+Three entry points:
 
 | Import | What it is |
 | --- | --- |
 | `@citisen/litearea` | The pure engine plus the DOM layer (`createEditor`, `LiteArea`) |
 | `@citisen/litearea/react` | The React binding (`LiteAreaEditor`) |
-| `@citisen/litearea/grammars` | The two worked example grammars |
 | `@citisen/litearea/styles.css` | The same stylesheet the editor injects, for hosts that link CSS |
+
+There is no grammar entry point. The library ships no syntax at all — a caller
+supplies the rules — and nothing in `src/core/` imports a language.
 
 React is an optional peer dependency (`react >= 18`) and the only peer. The
 package has no runtime dependencies at all. The stylesheet is injected into the
@@ -299,25 +301,44 @@ diagnostic vocabulary, and an end-to-end walkthrough that adds `analyze`,
 `checks`, and `validate` to this same language — is in
 [docs/grammar.md](docs/grammar.md).
 
-## The two reference grammars
+## No grammar is shipped
 
-The core ships no syntax: there is no built-in language, no language identifier
-to switch on, and nothing in `src/core/` that knows what a font stack is. The two
-grammars in `@citisen/litearea/grammars` exist to check that claim rather than
-merely assert it. Both are real DSLs from the two plugins this library came out
-of, and both are importable by a host that does not want to retype a language
-that already exists:
+There is no built-in language, no language identifier to switch on, no bundled
+tokenizer, and no grammar to import: nothing in `src/core/` knows what a font
+stack is, and the package publishes no grammar entry point. A caller supplies the
+rules, and the two examples in this file are the whole of what this repository
+offers as a worked language.
 
-| Grammar | The language | What it exercises |
-| --- | --- | --- |
-| `dshSentryStyleGrammar()` | dsh-sentry's appearance document: one line per session state, then positional values or `key=value` pairs | A first-word vocabulary with rejection, an analysis that both fills slots and records the problems it found, a declarative `check`, two completion sources using `sortText`, and hover from vocabulary documentation |
-| `dshFontQueryGrammar()` | dsh-font's font query: a CSS font-family list with the weight written beside the family it belongs to | Quote handling in the lexical rules, a `scope` function that reads the analysis, dynamic vocabularies resolved from the host's installed catalogue, multi-word phrases, completion that inserts *before* an entry, and a semantic decoration |
+That is a deliberate boundary rather than an omission. The editor came out of two
+plugins with real DSLs — dsh-sentry's appearance document and dsh-font's font
+query — and each of those grammars now lives beside the plugin that owns it, as a
+grammar object the plugin hands to `createEditor` (or to `LiteAreaEditor`). The
+shape of one is worth showing, because it is what a grammar written against a real
+product looks like, and because it says plainly whose code it is:
 
-Neither is built in. Nothing in `src/core/` imports them, no option switches them
-on, and an editor constructed without one of them has no syntax whatsoever.
+```ts
+// In the dsh-font plugin, NOT in litearea. The plugin owns the language; the
+// library owns the engine that reads it, and ships no language of its own.
+export const fontQueryGrammar = defineGrammar({
+  id: 'dsh-font-query',
+  // `-apple-system` must be ONE word, or a completion would replace half of it.
+  wordChars: /[\p{L}\p{N}_-]/u,
+  rules: [
+    { kind: 'words', words: (context) => context.state.catalogue },
+    { kind: 'match', scope: 'family.generic', pattern: /monospace|sans-serif|serif/ },
+    { kind: 'match', scope: 'weight', pattern: /thin|light|regular|medium|bold/ },
+    { kind: 'match', scope: 'separator', pattern: /,/ },
+  ],
+})
+```
 
-Two decisions in `dshSentryStyleGrammar` are worth stating, because both were
-found by comparing the grammar against the parser it edits for:
+Shipping either grammar would be a scaling trap as much as an inconsistency: every
+consumer that inlines the library would carry every language, so adding a
+JavaScript, CSS, HTML, or Rust grammar later would grow the bundle of hosts that
+use none of them. A grammar belongs where the language is parsed.
+
+Two decisions in that plugin's own grammar are worth stating anyway, because both
+were found by comparing the grammar against the parser it edits for:
 
 - **It is deliberately stricter than the host parser.** `parseStyle` in the
   plugin does no value checking for a known option: it writes `shape=bogus` into
@@ -403,7 +424,7 @@ Colours, spacing, and the type scale come from custom properties on the wrapper:
 | `--litearea-accent` / `--litearea-accent-soft` / `--litearea-selection` | `#4d6bfe` and two alpha variants |
 | `--litearea-error` / `--litearea-warning` / `--litearea-info` / `--litearea-hint` | The four severity colours |
 | `--litearea-shadow` | The floating panel's shadow |
-| `--litearea-scope-*` | One colour per scope the two reference grammars use |
+| `--litearea-scope-*` | One colour per scope name in the shipped palette, so a scope a grammar invents still has a themed colour to fall back on |
 
 A dark scheme is applied automatically from `prefers-color-scheme`.
 

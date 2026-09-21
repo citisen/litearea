@@ -163,9 +163,9 @@ eligible while that head is being spelled out. `runn\|` is no longer "at the sta
 of the line" in the strict sense — the line already has content — but it is
 unmistakably completing the first word. A source that asked `firstOnLine` would
 switch itself off after the very first keystroke, which is the bug the second field
-exists to prevent. `dshSentryStyleGrammar` asks `firstWord` for exactly this
-reason, and it is the difference between a list that helps and a list that keeps
-disappearing.
+exists to prevent. A line-oriented grammar's first-word completion asks
+`firstWord` for exactly this reason, and it is the difference between a list that
+helps and a list that keeps disappearing.
 
 ## Ranking
 

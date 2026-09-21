@@ -51,22 +51,26 @@ too.
 **The strongest configuration is all three: staging, a protected `main`, and a
 protected `npm-publish` environment.** The third one is opt-in (see below).
 
-## Bootstrapping: the first release is by hand
+## Bootstrapping: the first release was by hand
 
 A trusted publisher is configured on the package's own settings page, so a
-package that does not exist yet cannot have one. `@citisen/litearea` has **never
-been published**, so this is not history — it is the sequence that still has to
-happen, once, before any of the rest of this document applies:
+package that does not exist yet cannot have one. That is why `0.1.0` was
+published by hand, once, before any of the rest of this document could apply:
 
 1. `npm login`, then `npm run check`, then `npm publish`
-   (0.1.0, with your 2FA — `publishConfig.access` is already `public`, and the
-   `prepublishOnly` hook runs the gate for you either way).
+   — **done**: `0.1.0` is on the registry, with 2FA. `publishConfig.access` is
+   already `public`, and the `prepublishOnly` hook ran the gate on the way out.
 2. Configure the trusted publisher as below.
-3. Cut the next patch through CI staging and approve it — that proves the OIDC
+3. Cut the next release through CI staging and approve it — that proves the OIDC
    path works end to end.
 4. Revoke the local token and remove the `_authToken` line from `~/.npmrc`.
 
-Once step 3 has succeeded, no local credential needs publish rights again.
+Steps 3 and 4 are not self-certifying. Whether the trusted publisher is
+*configured* is a setting you can read; whether the OIDC exchange *works* is only
+demonstrated by a staging run that reaches `npm stage publish` and a human who
+approves the result. Until that has happened once, `0.1.0` remains the only
+version this package has ever published — and the only one that bypassed CI, and
+therefore the only one nothing in this document had to protect.
 
 ## One-time setup
 
@@ -133,7 +137,8 @@ The only *dynamic* proof is a real publish that fails, and that is not worth
 running against a live package. It is also unnecessary: with tokens disallowed,
 the OIDC grant plus a human approval is the only path that can put a version on
 the registry — which is exactly what the staging workflow exercises on every
-release, and what the first CI staging run of this package will demonstrate.
+release. `0.1.0` predates it, so the first staged release is the run that proves
+it for this package.
 
 ### 3. Optionally gate staging on a reviewer
 
@@ -147,8 +152,8 @@ is why this step is worth doing deliberately.
 ```sh
 # on main, through a PR
 npm version patch --no-git-tag-version   # or minor / major
-git commit -am "Release v0.1.1"
-git tag v0.1.1
+git commit -am "Release v0.2.0"
+git tag v0.2.0
 git push --follow-tags
 ```
 
@@ -201,7 +206,7 @@ and exercise it from where it landed:
 mkdir -p /tmp/litearea-scratch && cd /tmp/litearea-scratch
 npm init -y >/dev/null
 npm install @citisen/litearea
-ls node_modules/@citisen/litearea/dist   # index.js, index.cjs, index.d.ts, react.*, grammars.*, styles.css
+ls node_modules/@citisen/litearea/dist   # index.js, index.cjs, react.*, styles.*, styles.css, types/
 node -e "import('@citisen/litearea').then(m => console.log(Object.keys(m).length, 'exports'))"
 ```
 

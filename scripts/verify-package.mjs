@@ -26,15 +26,17 @@ const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
  * Every entry point `package.json` promises, and where its declarations landed.
  *
  * The declarations come from `tsc` rather than from the JavaScript bundler, so they
- * mirror the source tree: the root entry is one file, while `react` and `grammars`
- * are directories with an `index.d.ts` in them. That extra level is the price of not
- * depending on a declaration bundler that predates TypeScript 7, and it is encoded
- * here so a change to the layout cannot pass unnoticed.
+ * mirror the source tree: the root entry is one file, while `react` is a directory
+ * with an `index.d.ts` in it. That extra level is the price of not depending on a
+ * declaration bundler that predates TypeScript 7, and it is encoded here so a change
+ * to the layout cannot pass unnoticed.
+ *
+ * There is deliberately no `grammars` entry: the library ships no syntax, so it
+ * publishes no grammar for a host to import and none for this verifier to borrow.
  */
 const ENTRIES = [
   { name: 'index', declarations: 'types/index.d.ts' },
   { name: 'react', declarations: 'types/react/index.d.ts' },
-  { name: 'grammars', declarations: 'types/grammars/index.d.ts' },
   { name: 'styles', declarations: 'types/styles.d.ts' },
 ]
 
@@ -72,17 +74,6 @@ const CORE_EXPORTS = [
   'redoField',
   'writeDocument',
   'canEditThroughPipeline',
-]
-
-/** The names the grammars entry must export. */
-const GRAMMAR_EXPORTS = [
-  'dshFontQueryGrammar',
-  'dshSentryStyleGrammar',
-  'fontWeightWord',
-  'fontFaceWeights',
-  'quoteFontFamily',
-  'FONT_WEIGHT_WORDS',
-  'FONT_GENERIC_FAMILIES',
 ]
 
 /** The names the React entry must export. */
@@ -171,30 +162,63 @@ const core = await import(pathToFileURL(join(dist, 'index.js')).href)
 const missing = CORE_EXPORTS.filter((name) => core[name] === undefined)
 if (missing.length > 0) fail(`index.js does not export: ${missing.join(', ')}`)
 
-const grammars = await import(pathToFileURL(join(dist, 'grammars.js')).href)
-const missingGrammars = GRAMMAR_EXPORTS.filter((name) => grammars[name] === undefined)
-if (missingGrammars.length > 0) fail(`grammars.js does not export: ${missingGrammars.join(', ')}`)
-
 const react = await import(pathToFileURL(join(dist, 'react.js')).href)
 const missingReact = REACT_EXPORTS.filter((name) => react[name] === undefined)
 if (missingReact.length > 0) fail(`react.js does not export: ${missingReact.join(', ')}`)
 
 // ── the engine works from the built artifact, not just from source ─────────
+//
+// The grammar below is a FIXTURE and lives only in this file. The package ships
+// no syntax, so there is nothing to import: a verifier that borrowed a language
+// from somewhere else would be checking that language rather than the artifact
+// it is here to check. Two rules and one vocabulary are enough to prove the
+// built engine still tokenizes, diagnoses, completes, and segments.
 
-const grammar = grammars.dshSentryStyleGrammar()
-const inspection = core.inspect('running  circle  blue  turn   3\nbogus circle', grammar)
+/** A closed set of shapes, small enough to read at a glance. */
+const SHAPES = core.defineVocabulary({
+  id: 'shape',
+  words: ['circle', 'square'],
+  unknownMessage: '"{word}" is not a shape — expected {allowed}.',
+  docs: { circle: { detail: 'a disc', body: 'Verifier fixture documentation.' } },
+})
+
+/** The whole language: one keyword, one vocabulary, one completion source. */
+const fixture = core.defineGrammar({
+  id: 'verify-fixture',
+  rules: [
+    { kind: 'match', scope: 'keyword', pattern: /draw/ },
+    { kind: 'words', words: SHAPES, unknown: {} },
+  ],
+  compose: [
+    {
+      id: 'shape',
+      range: (context) => context.word,
+      items: () =>
+        ['circle', 'square'].map((shape) => ({
+          label: shape,
+          append: ' ',
+          kind: 'shape',
+          detail: SHAPES.entryFor(shape)?.detail,
+        })),
+    },
+  ],
+})
+
+const inspection = core.inspect('draw circle\nbogus square', fixture)
 assert.ok(inspection.tokens.length > 0, 'the built engine produced no tokens')
 assert.ok(
-  inspection.diagnostics.some((diagnostic) => diagnostic.code === 'vocabulary:state'),
-  'the built engine did not report the unknown state',
+  inspection.diagnostics.some((diagnostic) => diagnostic.code === 'vocabulary:shape'),
+  'the built engine did not report the unknown shape',
 )
-const completion = core.complete(inspection, grammar, {
-  text: 'running ',
-  caret: 'running '.length,
+const completion = core.complete(core.inspect('draw ', fixture), fixture, {
+  text: 'draw ',
+  caret: 'draw '.length,
   trigger: 'explicit',
 })
 assert.ok(completion !== undefined, 'the built engine offered no completion')
 assert.ok(completion.rows.length > 0, 'the built engine offered an empty completion')
+assert.equal(completion.sourceId, 'shape', 'the built engine opened the wrong completion source')
+assert.equal(completion.rows[0]?.item.append, ' ', 'the built engine dropped a row field')
 
 const segments = core.buildSegments(inspection.text, inspection)
 assert.equal(

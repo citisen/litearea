@@ -1,9 +1,10 @@
 // --- mini-conf: a configuration language, written for this demo --------------
 //
-// Neither reference grammar is a key/value language, and this one exists to show
-// what they do not: a REGION that a comment can open and close (and nest inside),
-// rules placed by POSITION (firstOnLine, after, line), a declarative check,
-// completion rows that carry commit characters, and per-word hover docs.
+// The demo's first grammar, and a key/value language — which the demo's second
+// one (swatch) is not. It exists to show a REGION that a comment can open and
+// close (and nest inside), rules placed by POSITION (firstOnLine, after, line),
+// a declarative check, completion rows that carry commit characters, and
+// per-word hover docs.
 //
 //     # a line comment — a semicolon opens one too, when it is first on its line
 //     theme = dark            ; an unknown key, and a diagnostic about it

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 /**
- * The JavaScript build: four entries, dual ESM/CJS.
+ * The JavaScript build: three entries, dual ESM/CJS.
  *
  * `styles` is its own entry so `scripts/build-css.mjs` can read the stylesheet back
  * out of the built ESM and emit `dist/styles.css` — one source of truth for the CSS,
@@ -20,7 +20,6 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     react: 'src/react/index.tsx',
-    grammars: 'src/grammars/index.ts',
     styles: 'src/styles.ts',
   },
   outDir: 'dist',

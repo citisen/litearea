@@ -1,9 +1,17 @@
 // ─── the demo app ───────────────────────────────────────────────────────────
 //
-// One page, four sections, and one rule the whole layout obeys: nothing here ever
+// One page, three sections, and one rule the whole layout obeys: nothing here ever
 // writes text into an editor except `setValue`. The editor owns its document, so
 // React state holds a MIRROR of the text for the panels beside it and never a
 // source of truth — which is the subject of the last section.
+//
+// The grammars here are the demo's OWN, both of them beside this file under
+// `examples/demo/grammars/`. The library ships no syntax, and the two production
+// DSLs this editor came out of — dsh-font's font query and dsh-sentry's
+// appearance document — now live with the plugins that own them. The demo neither
+// imports nor copies them: it demonstrates the engine with grammars written for
+// the demo, so a host should take these grammar objects as templates rather than
+// the directory as a menu of languages.
 
 import * as React from 'react'
 import type {
@@ -16,75 +24,38 @@ import type {
   LiteAreaSizing,
 } from '@citisen/litearea'
 import { LiteAreaEditor } from '@citisen/litearea/react'
-import type { DshFontState, DshSentryState } from '@citisen/litearea/grammars'
-import {
-  dshFontQueryGrammar,
-  dshSentryStyleGrammar,
-  fontFaceWeights,
-} from '@citisen/litearea/grammars'
 import { MINI_DEFAULT, miniConfGrammar, type MiniState } from './grammars/mini'
+import {
+  SWATCH_DEFAULT,
+  swatchGrammar,
+  type SwatchOptions,
+  type SwatchState,
+} from './grammars/swatch'
 
 // ── the languages ───────────────────────────────────────────────────────────
 // Built once at module scope. A grammar object is pure data, and rebuilding one on
 // every render would only give the editor something new to re-resolve.
 
-const sentryGrammar = dshSentryStyleGrammar()
-
 /**
- * A small but realistic installed-font catalogue, plus the faces each family
- * reports. `Geist Mono` is the one that matters: the seeded query names it, so the
- * grammar can tell that its `medium` face exists and that it is the family in
- * effect. `Zhuque Fangsong (technical preview)` is deliberately absent.
+ * The palette is the HOST's: it is handed to the grammar as an option, and the
+ * grammar resolves it once per scan, so the same document reads differently on a
+ * machine whose palette differs. `mauve` is deliberately absent from this list
+ * while the seeded document paints with it, so the panel has a squiggle to
+ * explain.
  */
-const FONT_CATALOGUE: readonly string[] = [
-  'Geist',
-  'Geist Mono',
-  'Inter Tight',
-  'IBM Plex Sans',
-  'IBM Plex Mono',
-  'JetBrains Mono',
-  'Source Han Sans SC',
-  'Noto Sans SC',
-  'Roboto Mono',
-  'Helvetica Neue',
-]
+const SWATCH_PALETTE: readonly string[] = ['red', 'teal', 'amber', 'slate', 'off-white']
 
-const FONT_STYLES: Readonly<Record<string, readonly string[]>> = {
-  Geist: ['Thin', 'Light', 'Regular', 'Medium', 'SemiBold', 'Bold', 'Black'],
-  'Geist Mono': ['Regular', 'Medium', 'SemiBold', 'Bold'],
-  'Inter Tight': ['Light', 'Regular', 'Medium', 'SemiBold', 'Bold'],
-  'IBM Plex Sans': ['Thin', 'Light', 'Regular', 'SemiBold', 'Bold'],
-  'IBM Plex Mono': ['Regular', 'SemiBold', 'Bold'],
-  'JetBrains Mono': ['Regular', 'Medium', 'Bold', 'Bold Italic'],
-  'Source Han Sans SC': ['Light', 'Regular', 'Medium', 'Bold'],
-  'Noto Sans SC': ['Thin', 'Regular', 'Medium', 'Black'],
-  'Roboto Mono': ['Light', 'Regular', 'Medium', 'Bold'],
-  'Helvetica Neue': ['Regular', 'Medium', 'Bold'],
+const swatchOptions: SwatchOptions = {
+  palette: SWATCH_PALETTE,
+  // The colour the host calls the base coat. It is marked by a decoration rather
+  // than by a token, because it is a fact about the palette and not about the
+  // characters in the file.
+  base: 'teal',
 }
 
-// `enumerated: true` is the interesting setting: it says the catalogue was READ from
-// the machine, so a family that is not in it earns a warning and the first installed
-// family is the one marked as in effect.
-const fontGrammar = dshFontQueryGrammar({
-  catalogue: FONT_CATALOGUE,
-  enumerated: true,
-  styles: FONT_STYLES,
-  shippedWeight: 400,
-})
+const swatch = swatchGrammar(swatchOptions)
 
 const miniGrammar = miniConfGrammar()
-
-// ── the seeded documents ────────────────────────────────────────────────────
-
-const SENTRY_DOCUMENT = [
-  'running  circle  blue  turn   3',
-  'waiting  rounded amber blink  1.1',
-  'approval rounded amber blink  1.9',
-  'done     circle  green flush  1.6',
-  '',
-].join('\n')
-
-const FONT_DOCUMENT = 'Geist Mono medium, "Zhuque Fangsong (technical preview)", monospace\n'
 
 // ── the controls ────────────────────────────────────────────────────────────
 
@@ -195,9 +166,11 @@ export function App(): React.ReactElement {
       <header className="demo-head">
         <h1>litearea</h1>
         <p>
-          Three grammars, one editor, and no text ever pushed back into it. Each panel below is the
-          same React component with different data; the last section shows why that component has no{' '}
-          <code>value</code>/<code>onChange</code> loop to fight over.
+          Two grammars written for this demo, one editor, and no text ever pushed back into it.
+          Each panel below is the same React component with different data; the last section shows
+          why that component has no <code>value</code>/<code>onChange</code> loop to fight over.
+          The library ships no syntax, and the real DSLs it came out of live beside the plugins
+          that own them — so the panels here use the demo&rsquo;s own grammars and nothing else.
         </p>
       </header>
 
@@ -332,7 +305,7 @@ export function App(): React.ReactElement {
   )
 }
 
-/** The three grammar panels. */
+/** The demo's two grammar panels. */
 function DemoPanels(props: {
   editorProps: EditorProps
   editors: React.RefObject<Map<string, LiteArea<unknown>>>
@@ -343,8 +316,7 @@ function DemoPanels(props: {
 
   return (
     <>
-      <SentryPanel {...shared} />
-      <FontPanel {...shared} />
+      <SwatchPanel {...shared} />
       <MiniPanel {...shared} />
     </>
   )
@@ -368,14 +340,14 @@ interface PanelProps {
   editorProps: EditorProps
 }
 
-// ── panel 1: dsh-sentry ─────────────────────────────────────────────────────
+// ── panel 1: swatch (a grammar written for this demo) ───────────────────────
 
-function SentryPanel(props: PanelProps): React.ReactElement {
-  const state = useEditorPanel<DshSentryState>({
-    id: 'sentry',
-    title: 'dsh-sentry style document',
-    grammar: sentryGrammar,
-    defaultValue: SENTRY_DOCUMENT,
+function SwatchPanel(props: PanelProps): React.ReactElement {
+  const state = useEditorPanel<SwatchState>({
+    id: 'swatch',
+    title: 'swatch',
+    grammar: swatch,
+    defaultValue: SWATCH_DEFAULT,
     ...props,
   })
 
@@ -383,141 +355,73 @@ function SentryPanel(props: PanelProps): React.ReactElement {
   return (
     <section className="demo-panel">
       <PanelHead
-        title="dsh-sentry style document"
-        subtitle="A line-oriented document. A state word opens each line and the rest of the line fills its slots — try `runn`, or `color=`."
+        title="swatch (a grammar written for this demo)"
+        subtitle="A palette the HOST supplies, the shapes this language knows, and a size. Try `ma`, pick a shape from the list, hover a shape name, or leave the size off a line."
       />
       {state.editor}
       <Diagnostics diagnostics={state.diagnostics} />
       <section className="demo-readout">
-        <h4>Grammar analysis — per-line state and filled slots</h4>
-        {analysis === undefined ? (
-          <p className="demo-empty">waiting for the first inspection…</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>state</th>
-                <th>known</th>
-                <th>slots</th>
-                <th>keys</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analysis.lines.map((line) => (
-                <tr key={line.number}>
-                  <td>{line.number + 1}</td>
-                  <td>{line.state ?? '—'}</td>
-                  <td>{line.known ? 'yes' : 'no'}</td>
-                  <td>
-                    {Object.entries(line.slots)
-                      .map(([slot, value]) => `${slot}=${String(value)}`)
-                      .join(' ') || '—'}
-                  </td>
-                  <td>{line.keys.join(', ') || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-      <CompletionPanel completion={state.completion} />
-      <HoverPanel hover={state.hover} />
-      <PanelFoot label="Reset to the shipped four-state document" onReset={state.reset} />
-    </section>
-  )
-}
-
-// ── panel 2: dsh-font ───────────────────────────────────────────────────────
-
-function FontPanel(props: PanelProps): React.ReactElement {
-  const state = useEditorPanel<DshFontState>({
-    id: 'font',
-    title: 'dsh-font font query',
-    grammar: fontGrammar,
-    defaultValue: FONT_DOCUMENT,
-    ...props,
-  })
-
-  const analysis = state.analysis
-  return (
-    <section className="demo-panel">
-      <PanelHead
-        title="dsh-font font query"
-        subtitle="A CSS font-family list with a weight written beside the family it belongs to. Put the caret after `Geist Mono ` — the weights offered come from the faces this machine reports."
-      />
-      {state.editor}
-      <Diagnostics diagnostics={state.diagnostics} />
-      <section className="demo-readout">
-        <h4>Grammar analysis — entries, families, effective family, weight</h4>
+        <h4>Grammar analysis — entries, and the host palette behind them</h4>
         {analysis === undefined ? (
           <p className="demo-empty">waiting for the first inspection…</p>
         ) : (
           <>
+            <ul className="demo-facts">
+              <li>
+                host palette: <code>{SWATCH_PALETTE.join(' | ')}</code>
+              </li>
+              <li>
+                base coat: <code>{swatchOptions.base ?? '—'}</code>{' '}
+                <span className="demo-note">
+                  marked by a decoration, because which colour is the base is the palette&rsquo;s
+                  fact and not the document&rsquo;s
+                </span>
+              </li>
+              <li>
+                swatches read: <code>{analysis.entries.length}</code>
+              </li>
+              <li>
+                structural problems: <code>{analysis.problems.length}</code>{' '}
+                <span className="demo-note">
+                  reported through <code>validate</code>, so the diagnostics above are{' '}
+                  <code>inspect</code>&rsquo;s own list rather than a second opinion
+                </span>
+              </li>
+            </ul>
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>entry</th>
-                  <th>kind</th>
-                  <th>family</th>
-                  <th>weight</th>
-                  <th>faces read</th>
+                  <th>line</th>
+                  <th>colour</th>
+                  <th>shape</th>
+                  <th>size</th>
                 </tr>
               </thead>
               <tbody>
-                {analysis.entries.map((entry, index) => (
+                {analysis.entries.map((entry) => (
                   <tr
-                    key={`${String(index)}:${entry.core}`}
-                    className={index === analysis.effective ? 'demo-effective' : undefined}
+                    key={`${String(entry.line)}:${entry.color.name}`}
+                    className={entry.color.name === swatchOptions.base ? 'demo-effective' : undefined}
                   >
-                    <td>{index + 1}</td>
-                    <td>{entry.core || '—'}</td>
-                    <td>{entry.kind}</td>
-                    <td>{entry.name || '—'}</td>
-                    <td>{entry.word ?? '—'}</td>
-                    <td>{fontFaceWeights(FONT_STYLES[entry.name]).join(', ') || '—'}</td>
+                    <td>{entry.line + 1}</td>
+                    <td>{entry.color.name}</td>
+                    <td>{entry.shape}</td>
+                    <td>{entry.size}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <ul className="demo-facts">
-              <li>
-                families: <code>{analysis.families.join(' | ') || '—'}</code>
-              </li>
-              <li>
-                effective family index: <code>{analysis.effective}</code>{' '}
-                {analysis.effective >= 0 ? (
-                  <strong>→ {analysis.families[analysis.effective]}</strong>
-                ) : (
-                  <span className="demo-note">nothing in the list is installed</span>
-                )}
-              </li>
-              <li>
-                weight:{' '}
-                <code>{analysis.weight === undefined ? '—' : String(analysis.weight)}</code>{' '}
-                {analysis.weightWord === undefined ? (
-                  <span className="demo-note">no weight word is written</span>
-                ) : (
-                  <span className="demo-note">from `{analysis.weightWord}`</span>
-                )}
-              </li>
-              <li className="demo-note">
-                The machine has no thin face for `Geist Mono`, so changing `medium` to `thin` earns a
-                warning rather than a silently synthesised weight.
-              </li>
-            </ul>
           </>
         )}
       </section>
       <CompletionPanel completion={state.completion} />
       <HoverPanel hover={state.hover} />
-      <PanelFoot label="Reset to the shipped query" onReset={state.reset} />
+      <PanelFoot label="Reset to the shipped swatch document" onReset={state.reset} />
     </section>
   )
 }
 
-// ── panel 3: mini-conf ──────────────────────────────────────────────────────
+// ── panel 2: mini-conf (a grammar written for this demo) ────────────────────
 
 function MiniPanel(props: PanelProps): React.ReactElement {
   const state = useEditorPanel<MiniState>({

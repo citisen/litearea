@@ -67,9 +67,9 @@ export interface Token extends Range {
  * tokens and they are deliberately not tokens here.
  *
  * The distinction earns its keep. A token is what the *characters* are; a
- * decoration is what they *mean*, and the two change on different schedules. The
- * font-query grammar paints `Geist Mono` as a family from the characters alone,
- * but which family is *in effect* depends on the installed catalogue — the same
+ * decoration is what they *mean*, and the two change on different schedules. A
+ * grammar can paint `Geist Mono` as a family from the characters alone, but which
+ * family is *in effect* depends on a catalogue the HOST supplied — the same
  * characters mean something else on another machine. Painting that as a token
  * would mean re-lexing the document whenever the catalogue changed; painting it
  * as a decoration means recomputing one range list, which is what it is.
@@ -493,8 +493,8 @@ export interface CompletionContext<State = unknown> {
    * `runn|` is no longer "at the start of the line" in the strict sense, but it is
    * unmistakably completing the first word. A source that asked `firstOnLine` would
    * switch itself off after the very first keystroke — which is exactly the bug this
-   * field was added to fix, and exactly the kind of thing a reference grammar is
-   * for finding.
+   * field was added to fix, and exactly the kind of thing a grammar written against
+   * a real document is for finding.
    */
   firstWord: boolean
   /** The first non-whitespace token on the caret's line, when there is one. */

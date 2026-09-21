@@ -34,7 +34,6 @@
      */
     "paths": {
       "@citisen/litearea": ["./src/index.ts"],
-      "@citisen/litearea/grammars": ["./src/grammars/index.ts"],
       "@citisen/litearea/react": ["./src/react/index.tsx"]
     }
   },

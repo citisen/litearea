@@ -1,6 +1,6 @@
 {
   "name": "@citisen/litearea",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A lightweight textarea-based code editor: native undo/redo, fully custom syntax highlighting, VSCode-style completion, diagnostics, and hover tooltips. No CodeMirror, no Monaco.",
   "type": "module",
   "license": "MIT",
@@ -26,11 +26,6 @@
       "types": "./dist/types/react/index.d.ts",
       "import": "./dist/react.js",
       "require": "./dist/react.cjs"
-    },
-    "./grammars": {
-      "types": "./dist/types/grammars/index.d.ts",
-      "import": "./dist/grammars.js",
-      "require": "./dist/grammars.cjs"
     },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"

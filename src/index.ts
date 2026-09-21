@@ -6,12 +6,13 @@
 //
 // The package has three entry points and this is the largest:
 //
-//   @citisen/litearea            the engine and the DOM layer (this file)
-//   @citisen/litearea/react      a React binding over the same editor
-//   @citisen/litearea/grammars   two worked grammars for two real DSLs
+//   @citisen/litearea              the engine and the DOM layer (this file)
+//   @citisen/litearea/react        a React binding over the same editor
+//   @citisen/litearea/styles.css   the stylesheet, for hosts that link CSS
 //
-// Nothing here knows any syntax. `src/core/` is pure and needs no DOM; `src/dom/`
-// needs a document and no framework.
+// Nothing here knows any syntax, and the package ships none: a caller supplies
+// the rules. `src/core/` is pure and needs no DOM; `src/dom/` needs a document
+// and no framework.
 
 export type {
   CheckRule,

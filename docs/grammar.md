@@ -76,9 +76,9 @@ A function is handed everything a lexical decision could need:
 | `state` | Whatever `analyze` returned |
 
 The `state` field is the one that earns the function form: it is how a scope can
-depend on something the characters do not say. `dshFontQueryGrammar` uses it to
-paint a weight word as `weight` or `weight.missing`, which depends on the
-machine's installed faces, not on the word.
+depend on something the characters do not say. A grammar for a host's installed
+fonts uses it to paint a weight word as `weight` or `weight.missing`, which
+depends on the faces the host reported, not on the word.
 
 ### `match`: a regular expression
 
@@ -116,7 +116,7 @@ states the host actually has — costs one call, not one per token.
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `max` | 4 | The most words one entry may span. A span longer than `max` is never attempted, and four covers every family in the shipped catalogue (`Source Han Serif SC` is four) |
+| `max` | 4 | The most words one entry may span. A span longer than `max` is never attempted, and four covers a name like `Source Han Serif SC`, which is four words |
 
 The engine tries the longest span first and keeps the longest member it finds, so
 a catalogue holding both `IBM Plex` and `IBM Plex Mono` resolves the longer name.
@@ -346,10 +346,10 @@ decides three things at once:
 3. **Where a double click puts the selection**, because that is the platform's
    own word test and the browser uses the same notion of a word the field does.
 
-A language whose names contain a dot or a hyphen must say so. `dshFontQueryGrammar`
-uses `/[\p{L}\p{N}_-]/u` so `-apple-system` is one word; `dshSentryStyleGrammar`
-deliberately does *not* include `.`, so a stray `circle.` is not read as one
-unknown word and reported as a name the user never typed.
+A language whose names contain a dot or a hyphen must say so. A font query uses
+`/[\p{L}\p{N}_-]/u` so `-apple-system` is one word; a grammar whose names never
+contain a dot leaves it out, so a stray `circle.` is not read as one unknown word
+and reported as a name the user never typed.
 
 The flags are normalised: `g` and `y` are stripped from the predicate, because
 `RegExp.prototype.test` advances `lastIndex` on a global pattern and a predicate
@@ -442,7 +442,8 @@ diagnostic's `source` is always the grammar's `id`.
 
 `report` is also the place a structural walk that ran in `analyze` publishes what
 it found — record the ranges while the structure is known, and report them here.
-Both reference grammars do exactly that.
+That is the usual arrangement: `analyze` decides what is wrong and `validate`
+hands the ranges over.
 
 ### Codes and severities
 
@@ -476,12 +477,12 @@ detail and the body. Decorations are clamped into the document, dropped when the
 come out empty, and sorted — a grammar computing them from a stale parse cannot
 paint a span nobody can see.
 
-The font grammar's "in effect" pill is the worked case. `Geist Mono` is painted as
-a family from the characters alone — that is a token. Which family is *in effect*
-depends on the machine's installed catalogue, so the same characters mean
-something else on another computer. Painting that as a token would mean re-lexing
-the document whenever the catalogue changed; as a decoration it is one recomputed
-range list, which is what it actually is.
+A host's "in effect" mark is the worked case. `Geist Mono` is painted as a family
+from the characters alone — that is a token. Which family is *in effect* depends
+on the host's installed catalogue, so the same characters mean something else on
+another computer. Painting that as a token would mean re-lexing the document
+whenever the catalogue changed; as a decoration it is one recomputed range list,
+which is what it actually is.
 
 Reach for `decorate` when the mark depends on something outside the document. If
 nothing in your language does, do not add one — a decoration that could have been

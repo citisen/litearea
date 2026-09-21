@@ -32,14 +32,15 @@
 npm install @citisen/litearea
 ```
 
-三个入口加一份样式表：
+三个入口：
 
 | 导入 | 是什么 |
 | --- | --- |
 | `@citisen/litearea` | 纯引擎加上 DOM 层（`createEditor`、`LiteArea`） |
 | `@citisen/litearea/react` | React 绑定（`LiteAreaEditor`） |
-| `@citisen/litearea/grammars` | 两个作为范例的 grammar |
 | `@citisen/litearea/styles.css` | 编辑器自己注入的那份样式表，给想用 `<link>` 的宿主 |
+
+没有 grammar 入口。这个库一点语法都不带 —— 规则由调用方提供 —— `src/core/` 里也不导入任何语言。
 
 React 是可选的 peer 依赖（`react >= 18`），也是唯一的 peer 依赖。这个包没有任何运行时依赖。样式表在第一个编辑器创建时注入文档一次，除非传 `injectStyles: false`。
 
@@ -256,18 +257,31 @@ export const formSchema = defineGrammar({
 
 完整参考 —— 每种规则的全部字段、优先级、诊断词汇，以及在同一门语言上补出 `analyze`、`checks`、`validate` 的端到端走查 —— 在 [docs/grammar.md](docs/grammar.md)。
 
-## 两个参考 grammar
+## 不带任何 grammar
 
-核心不含语法：没有内置语言、没有可以 switch 的语言标识，`src/core/` 里没有任何代码知道字体栈是什么。`@citisen/litearea/grammars` 里的两个 grammar 是为了**验证**这个说法，而不是仅仅声明它。两门语言都是真实的 DSL，来自这个库所出的那两个插件；不想重打一遍已有语言的宿主可以直接导入：
+没有内置语言、没有可以 switch 的语言标识、没有捆绑的分词器，也没有可以导入的 grammar：`src/core/` 里没有任何代码知道字体栈是什么，包里也不发布 grammar 入口。规则由调用方提供，本文里的两个例子就是这个仓库给出的全部"写好的语言"。
 
-| Grammar | 语言 | 用到了什么 |
-| --- | --- | --- |
-| `dshSentryStyleGrammar()` | dsh-sentry 的外观文档：一个会话状态一行，后面跟位置取值或 `key=value` | 行首词汇表加拒绝、一次同时填槽位并记录问题的分析、一条声明式 `check`、两个用 `sortText` 的补全来源、来自 vocabulary 文档的悬浮说明 |
-| `dshFontQueryGrammar()` | dsh-font 的字体查询：一条 CSS font-family 列表，字重写在它所属的字族旁边 | 词法规则里处理引号、读分析结果的 `scope` 函数、从宿主已安装目录解析出来的动态 vocabulary、多词短语、**插到前面**的补全、以及一个语义 decoration |
+这是一条刻意划下的边界，而不是遗漏。这个编辑器出自两个带真实 DSL 的插件 —— dsh-sentry 的外观文档和 dsh-font 的字体查询 —— 而这两个 grammar 现在都待在拥有它们的插件身边，作为插件交给 `createEditor`（或 `LiteAreaEditor`）的 grammar 对象。其中一个的样子值得看一眼，因为它展示了"针对真实产品写的 grammar"长什么样，也因为它清楚地说明了这段代码归谁：
 
-两个都不是内置的。`src/core/` 不导入它们，没有任何选项能打开它们，不带 grammar 构造出来的编辑器一点语法都没有。
+```ts
+// 在 dsh-font 插件里，不在 litearea 里。语言归插件所有；库只拥有读它的引擎，
+// 自己一点语言都不带。
+export const fontQueryGrammar = defineGrammar({
+  id: 'dsh-font-query',
+  // `-apple-system` 必须算作一个词，否则补全会只替换它的一半。
+  wordChars: /[\p{L}\p{N}_-]/u,
+  rules: [
+    { kind: 'words', words: (context) => context.state.catalogue },
+    { kind: 'match', scope: 'family.generic', pattern: /monospace|sans-serif|serif/ },
+    { kind: 'match', scope: 'weight', pattern: /thin|light|regular|medium|bold/ },
+    { kind: 'match', scope: 'separator', pattern: /,/ },
+  ],
+})
+```
 
-`dshSentryStyleGrammar` 里有两个决定值得单独说明，因为它们都是拿 grammar 和被编辑的解析器对照之后发现的：
+把其中任何一个 grammar 打进包里，既是扩展性陷阱，也是前后不一致：每个内联了这个库的消费者都会背上所有语言，以后再想加 JavaScript、CSS、HTML 或 Rust 的 grammar，就会让完全用不到它们的宿主包体变大。语言应该待在解析它的地方。
+
+不过，那个插件自己的 grammar 里有两个决定仍然值得单独说明，因为它们都是拿 grammar 和被编辑的解析器对照之后发现的：
 
 - **它刻意比宿主解析器更严格。** 插件里的 `parseStyle` 对已知选项不做取值检查：它把 `shape=bogus` 原样写进规则，之后由 `resolveLook` 悄悄换成出厂默认值，于是拼错的表现只是"图标怎么都不变"。这个 grammar 会把它报出来 —— 报成 warning 而不是 error，因为文档仍然能用，只是它说的不是它想说的。
 - **它不接受 `fallback` 作为一个状态。** 插件自己的模块注释里写着 `fallback none`，但 `STYLE_STATES` 只有那四个状态，`fallback` 是内部从 `STYLE_FALLBACK_LOOK` 推导出来的，从来就没有被解析过。那句注释是过期的，把它照抄进 grammar，只会让编辑器和它服务的解析器互相矛盾。
@@ -327,7 +341,7 @@ export const formSchema = defineGrammar({
 | `--litearea-accent` / `--litearea-accent-soft` / `--litearea-selection` | `#4d6bfe` 以及两个带透明度的变体 |
 | `--litearea-error` / `--litearea-warning` / `--litearea-info` / `--litearea-hint` | 四种严重级别的颜色 |
 | `--litearea-shadow` | 浮层的阴影 |
-| `--litearea-scope-*` | 两个参考 grammar 用到的每个 scope 的颜色 |
+| `--litearea-scope-*` | 出厂调色板里每个 scope 名字一个颜色，所以 grammar 自己新造的 scope 也有主题色可回退 |
 
 深色方案由 `prefers-color-scheme` 自动应用。
 

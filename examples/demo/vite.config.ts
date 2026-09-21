@@ -6,18 +6,15 @@ import { defineConfig } from 'vite'
 // treats this file's neighbours as the app and writes `examples/demo/dist`.
 //
 // The alias points at `src/` rather than at `dist/`, so the demo runs against the
-// source and needs no prior `npm run build`. The two entries are declared
-// longest-first: Vite walks the alias list in order, and the bare package name is a
-// prefix of the subpath, so a careless order makes `@citisen/litearea/grammars`
-// resolve to `src/index.ts/grammars`.
+// source and needs no prior `npm run build`. The subpath is declared before the bare
+// package name: Vite walks the alias list in order, and the bare name is a prefix of
+// its own subpaths, so a careless order would resolve `@citisen/litearea/react` to
+// `src/index.ts/react`.
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react()],
   resolve: {
     alias: {
-      '@citisen/litearea/grammars': fileURLToPath(
-        new URL('../../src/grammars/index.ts', import.meta.url),
-      ),
       '@citisen/litearea/react': fileURLToPath(new URL('../../src/react/index.tsx', import.meta.url)),
       '@citisen/litearea': fileURLToPath(new URL('../../src/index.ts', import.meta.url)),
     },

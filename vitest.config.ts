@@ -17,7 +17,6 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     coverage: {
       include: ['src/**/*.ts'],
-      exclude: ['src/grammars/**'],
     },
   },
 })

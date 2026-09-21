@@ -265,11 +265,15 @@ of them are exactly why `scripts/browser-check.mjs` exists: a textarea's undo
 stack has no API to read and no way to fake, so the only honest test is to make an
 edit and undo it in a browser that has a real one.
 
-The harness bundles the **shipped** `dist/` files rather than `src/` — so what it
-drives is the artifact a host installs — inlines them as an IIFE (Chromium refuses
-to fetch an ES module from a `file://` URL), and drives the public API and the
-public DOM only: it mounts editors, types through `execCommand('insertText')`,
-presses keys, dispatches a `mousedown` on a row, and hovers a squiggle. The page
+The harness bundles the **shipped** `dist/index.js` — the package's one JavaScript
+entry point — rather than `src/`, so what it drives is the artifact a host
+installs, and it inlines it as an IIFE (Chromium refuses to fetch an ES module
+from a `file://` URL). The language the checks run against is defined inside the
+checklist itself, because the package ships none: proving that a particular
+product DSL works in a browser belongs beside the plugin that owns it, while the
+questions here are all about the engine. It drives the public API and the public
+DOM only: it mounts editors, types through `execCommand('insertText')`, presses
+keys, dispatches a `mousedown` on a row, and hovers a squiggle. The page
 reports through `document.title`, with `error` and `unhandledrejection` listeners
 that write to the same channel, because a page whose only output channel is its
 title has to report its own failures through that channel — otherwise a syntax
@@ -311,6 +315,6 @@ again", which is all most hosts need.
 | `contenteditable` | It makes the document a DOM tree that the browser edits in ways you do not control — nested elements, `<br>` for a blank line, pasted HTML — so the value would have to be re-serialised on every keystroke, which is the same re-render problem with more failure modes and no native undo semantics worth having |
 | A second highlighting layer per range list (one for scopes, one for decorations, one for squiggles) | Each layer would have to position its own spans, so each would need its own idea of where a range starts, and a span positioned by measuring drifts as soon as the font, the wrapping, or the padding is even slightly different from what was measured. One merged stream cannot drift because nothing is positioned |
 | Measuring the live field (`scrollHeight` after collapsing it) | It reflows the page and flickers on every keystroke — the measurement that is supposed to decide the height is what makes the height unstable. The offscreen mirror pays one extra layout and keeps the field's geometry out of the question |
-| A bundled grammar (a default language, or a language registry) | The claim of the library is that the core knows no syntax. A default grammar would make that claim false, and it would be the thing every host inherited. The two reference grammars are importable and deliberately outside `src/core/` |
+| A bundled grammar (a default language, or a language registry) | The claim of the library is that the core knows no syntax. A default grammar would make that claim false, and it would be the thing every host inherited. The package therefore ships no grammar at all: a DSL lives beside the plugin that owns it and is handed to the editor as a value |
 | Synthetic `beforeinput`/`InputEvent` edits | Untrusted, so the browser will not run them through the editing pipeline: the text changes and the history does not, which is worse than a documented `'direct'` fallback because it fails silently |
 | Tracking the caret as a character index in one module and a screen position in another | Every position that crosses a module boundary is a character offset; pixels enter only in `src/dom/`, only to place a floating element, and never travel back inward. Two coordinate systems for one caret is what produced the range that "had already moved" |
