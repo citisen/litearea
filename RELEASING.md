@@ -116,7 +116,7 @@ command the workflow runs, so there is no "works locally" gap to reason about:
 | `npm run build` | tsup, then `scripts/build-css.mjs` — the artifact must exist at all |
 | `npm run test` | the pure engine under vitest: scanning, grammar resolution, completion ranges, ranking, formatting |
 | `npm run verify` | `scripts/verify-package.mjs`, a Node verifier that reads the package the way an installer would |
-| `npm run browser` | the headless-Chromium harness against a real textarea |
+| `npm run browser` | the headless-Chromium harness against a real textarea. It exits 0 with `SKIP` when no Chromium is installed, so the workflow sets `LITEAREA_REQUIRE=1` and a runner without a browser fails the release instead of skipping the one check a stub cannot make |
 
 The last one is the only part of the gate that cannot be replaced by a stub, and
 it is worth being precise about why. A completion is an edit to the document

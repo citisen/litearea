@@ -112,6 +112,12 @@ jobs:
           fi
 
       - name: Verify the shipped artifacts
+        env:
+          # The harness exits 0 with "SKIP" when it cannot find a Chromium build,
+          # which is right on a laptop and wrong here: the browser step is the
+          # only place the undo claim is checkable, so on a runner a skipped
+          # harness has to fail the release rather than quietly pass it.
+          LITEAREA_REQUIRE: '1'
         run: |
           set -euo pipefail
           # It typechecks, builds the library, and runs the unit tests, the
