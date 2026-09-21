@@ -1,0 +1,4 @@
+# Keep every checkout byte-identical to what was committed. The build compares
+# and hashes generated output, and a Windows checkout that translated line
+# endings would differ from a Linux one for no reason anyone chose.
+* text=auto eol=lf

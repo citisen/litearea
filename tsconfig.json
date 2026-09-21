@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "types": ["vitest/globals"],
+
+    /*
+     * `paths` exists so the DEMO type-checks against `src/` rather than against the built
+     * declarations in `dist/`. Without it, `@citisen/litearea` inside `examples/` resolves
+     * through the package's own `exports` map to `dist/types/`, and a type-check would
+     * silently be validating the demo against whatever was built last instead of the code
+     * being edited. The built artifact is not left unverified by this: `scripts/verify-package.mjs`
+     * imports the real `dist/` output and exercises it, and `scripts/browser-check.mjs`
+     * bundles from it.
+     */
+    "paths": {
+      "@citisen/litearea": ["./src/index.ts"],
+      "@citisen/litearea/grammars": ["./src/grammars/index.ts"],
+      "@citisen/litearea/react": ["./src/react/index.tsx"]
+    }
+  },
+  "include": ["src", "test", "examples/**/*.ts", "examples/**/*.tsx", "*.ts"],
+  "exclude": ["node_modules", "dist", "examples/demo/dist"]
+}

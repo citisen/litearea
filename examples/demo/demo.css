@@ -1,0 +1,405 @@
+/*
+ * The page around the editors — and the smallest possible demonstration that the
+ * library is themeable.
+ *
+ * Everything visual about the editor itself comes from the stylesheet litearea
+ * injects when an editor is constructed. There is no `injectStyles` call and no
+ * import of `litearea/styles.css` anywhere in this demo. What follows only
+ *   · overrides a few of the library's custom properties, and
+ *   · styles the readouts beside each editor.
+ *
+ * The custom properties are declared on `.demo-app` and inherit down to the
+ * `.litearea` element the component renders. The library's own defaults live on
+ * that element, so anything set ABOVE it wins — which is what makes a themed
+ * host possible without a build-time fork of the stylesheet.
+ */
+
+.demo-app {
+  --litearea-font-size: 14px;
+  --litearea-radius: 10px;
+  --litearea-line-height: 21px;
+
+  --litearea-scope-state: #c2410c;
+  --litearea-scope-value-boolean: #7c3aed;
+  --litearea-scope-comment-block: #64748b;
+  --litearea-scope-comment-block-marker: #94a3b8;
+  --litearea-scope-section-name: #0f766e;
+  --litearea-scope-separator-bracket: #94a3b8;
+  --litearea-scope-value-plain: #0f766e;
+
+  --demo-bg: #f6f7f9;
+  --demo-surface: #ffffff;
+  --demo-fg: #1f2328;
+  --demo-muted: #6b7280;
+  --demo-border: #d8dbe0;
+  --demo-code-bg: #eef0f3;
+  --demo-error: #c2262b;
+  --demo-warning: #9a5b00;
+  --demo-info: #3b5bdb;
+  --demo-hint: #6b7280;
+
+  margin: 0 auto;
+  max-width: 1500px;
+  padding: 28px 20px 60px;
+  color: var(--demo-fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+/* The theme switch flips one class, and both halves of the page follow. */
+.demo-app.demo-dark {
+  --litearea-fg: #e6e8eb;
+  --litearea-fg-dim: #8b919b;
+  --litearea-bg: #16181d;
+  --litearea-bg-raised: #1f2329;
+  --litearea-border: #363b44;
+
+  --litearea-scope-state: #fdba74;
+  --litearea-scope-value-boolean: #c4b5fd;
+  --litearea-scope-comment-block: #8b919b;
+  --litearea-scope-comment-block-marker: #6b7280;
+  --litearea-scope-section-name: #5eead4;
+  --litearea-scope-separator-bracket: #6b7280;
+  --litearea-scope-value-plain: #5eead4;
+
+  --demo-bg: #101216;
+  --demo-surface: #191c21;
+  --demo-fg: #e6e8eb;
+  --demo-muted: #8b919b;
+  --demo-border: #2c313a;
+  --demo-code-bg: #23262c;
+  --demo-error: #ff8b8b;
+  --demo-warning: #fbbf24;
+  --demo-info: #93b4ff;
+  --demo-hint: #8b919b;
+}
+
+body {
+  margin: 0;
+  background: var(--demo-bg, #f6f7f9);
+}
+
+.demo-app *,
+.demo-app *::before,
+.demo-app *::after {
+  box-sizing: border-box;
+}
+
+/* ── the page head and foot ─────────────────────────────────────────────── */
+
+.demo-head h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.demo-head p,
+.demo-foot p {
+  max-width: 90ch;
+  margin: 0;
+  color: var(--demo-muted);
+  line-height: 1.55;
+}
+
+.demo-foot {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--demo-border);
+}
+
+/* ── the toolbar ────────────────────────────────────────────────────────── */
+
+.demo-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 22px 0 26px;
+  padding: 12px 14px;
+  border: 1px solid var(--demo-border);
+  border-radius: 12px;
+  background: var(--demo-surface);
+}
+
+.demo-toolbarRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 13px;
+}
+
+.demo-toolbarRow > strong {
+  flex: none;
+  width: 86px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--demo-muted);
+}
+
+.demo-toolbarRow label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.demo-toolbarRow .demo-note {
+  flex: 1 1 260px;
+}
+
+.demo-app button,
+.demo-app select {
+  padding: 4px 9px;
+  border: 1px solid var(--demo-border);
+  border-radius: 7px;
+  background: var(--demo-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.demo-app button:hover {
+  border-color: var(--demo-info);
+}
+
+.demo-app input[type='checkbox'] {
+  accent-color: var(--demo-info);
+}
+
+/* ── the panels ─────────────────────────────────────────────────────────── */
+
+.demo-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .demo-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.demo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--demo-border);
+  border-radius: 12px;
+  background: var(--demo-surface);
+}
+
+.demo-panelHead h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.demo-panelHead p {
+  margin: 0;
+  color: var(--demo-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.demo-panelFoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+}
+
+/*
+ * With auto-grow off the editor keeps the height `minRows` gave it and the field
+ * is allowed to scroll. The library leaves the field's own `overflow-y` alone in
+ * that mode, so the host says what should happen when the text stops fitting.
+ */
+.litearea-resizable .litearea-input {
+  overflow-y: auto;
+}
+
+/* ── the readouts ───────────────────────────────────────────────────────── */
+
+.demo-readout {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--demo-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--demo-surface) 92%, var(--demo-bg));
+}
+
+.demo-readout h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--demo-muted);
+}
+
+.demo-count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--demo-code-bg);
+  color: var(--demo-fg);
+  font-size: 10px;
+}
+
+.demo-empty {
+  margin: 0;
+  color: var(--demo-hint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.demo-readout table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.demo-readout th {
+  padding: 2px 6px 4px 0;
+  text-align: left;
+  font-weight: 600;
+  color: var(--demo-muted);
+  white-space: nowrap;
+}
+
+.demo-readout td {
+  padding: 2px 6px 2px 0;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.demo-readout tbody tr + tr td {
+  border-top: 1px solid var(--demo-border);
+}
+
+.demo-readout tr.demo-effective td {
+  background: color-mix(in srgb, var(--demo-info) 12%, transparent);
+}
+
+.demo-facts {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.demo-facts li + li {
+  margin-top: 2px;
+}
+
+.demo-app code,
+.demo-compare code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--demo-code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.demo-note {
+  color: var(--demo-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.demo-sev {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.demo-sev-error {
+  color: var(--demo-error);
+}
+
+.demo-sev-warning {
+  color: var(--demo-warning);
+}
+
+.demo-sev-info {
+  color: var(--demo-info);
+}
+
+.demo-sev-hint {
+  color: var(--demo-hint);
+}
+
+/* ── the comparison ─────────────────────────────────────────────────────── */
+
+.demo-compare {
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 1px solid var(--demo-border);
+}
+
+.demo-compare h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+
+.demo-compare p {
+  max-width: 100ch;
+  color: var(--demo-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.demo-compare kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--demo-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--demo-code-bg);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.demo-compareGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+
+@media (max-width: 800px) {
+  .demo-compareGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.demo-compareGrid h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.demo-compareGrid textarea {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--demo-border);
+  border-radius: 9px;
+  background: var(--demo-surface);
+  color: var(--demo-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+}

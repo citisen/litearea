@@ -1,0 +1,25 @@
+{
+  // The declaration build, kept apart from `tsconfig.json` on purpose.
+  //
+  // The type-check configuration covers the tests, the examples, and the build
+  // scripts, because those are all code that should fail a check. This one covers
+  // `src` alone, because a declaration file may only describe the package: pointing
+  // it at anything else makes the emitted tree mirror the repository instead of the
+  // module, and `dist/types/test/...` is not something to publish.
+  //
+  // `tsc` is used rather than the declaration bundler that ships with the JS build,
+  // because that bundler predates TypeScript 7's compiler API and cannot run here.
+  // Emitting a mirrored tree costs one level of directory in the `exports` map and
+  // removes a dependency that would otherwise pin the compiler version.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "dist/types",
+    "rootDir": "src",
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,21 @@
+# The toolchain's own install. Nothing here is shipped: `dist/` is built from
+# `src/` by `npm run build`, and the published tarball carries the built output
+# plus the sources it came from.
+node_modules/
+
+# Build output. Deliberately NOT committed, unlike a DSH plugin's `lib/`: this
+# is a plain library, so the registry tarball is the artifact that matters and a
+# committed copy would only be one more thing to keep in step.
+dist/
+coverage/
+
+# The demo's own build, which `npm run demo:build` writes.
+examples/demo/dist/
+
+# npm pack output
+*.tgz
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.log
