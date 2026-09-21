@@ -74,10 +74,12 @@ published by hand, once, before any of the rest of this document could apply:
 
 Steps 3 and 4 are not self-certifying. Whether the trusted publisher is
 *configured* is a setting you can read; whether the OIDC exchange *works* is only
-demonstrated by a staging run that reaches `npm stage publish` and a human who
-approves the result. Until that has happened once, `0.1.0` remains the only
-version this package has ever published — and the only one that bypassed CI, and
-therefore the only one nothing in this document had to protect.
+demonstrated by a staging run that reaches `npm stage publish`. **Step 3 is
+done**: the `0.2.0` stage was created by `GitHub Actions (trusted automation)`
+with no token on the runner. Step 4 is the one still outstanding — until the
+local credential is revoked, `0.1.0` remains the only version this package
+published by hand, and the hand publish the only one nothing in this document
+had to protect.
 
 ## One-time setup
 
@@ -144,8 +146,8 @@ The only *dynamic* proof is a real publish that fails, and that is not worth
 running against a live package. It is also unnecessary: with tokens disallowed,
 the OIDC grant plus a human approval is the only path that can put a version on
 the registry — which is exactly what the staging workflow exercises on every
-release. `0.1.0` predates it, so the first staged release is the run that proves
-it for this package.
+release. `0.1.0` predates it; the `0.2.0` stage is the run that proved it for
+this package.
 
 ### 3. Optionally gate staging on a reviewer
 

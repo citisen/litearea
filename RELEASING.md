@@ -71,14 +71,15 @@ page. The sequence was:
    nothing local needs publish rights at all.
 
 3. Verify the OIDC path actually works by cutting the next release through CI
-   — a staged tarball that a human approves, with no token involved. **This is
-   the step that is not yet proven**: a *configured* trusted publisher says
-   nothing about whether the exchange works, so the first staging run is the
-   proof, not the settings page.
+   — a staged tarball that a human approves, with no token involved. **Done**:
+   the `0.2.0` stage reports `staged by: GitHub Actions (trusted automation)`,
+   which a configured-but-broken trusted publisher could not produce, because
+   the workflow deletes any `.npmrc` and unsets `NODE_AUTH_TOKEN`/`NPM_TOKEN`
+   before staging.
 
-4. Revoke the local token, once step 3 has succeeded. Until it does, `0.1.0`
-   remains both the only version this package has ever published and the only
-   one that bypassed CI.
+4. Revoke the local token — **the one step still outstanding**. Until it is
+   gone, `0.1.0` remains the only version this package published by hand, and a
+   live credential is the one path to the registry this document does not cover.
 
 ## Step detail
 
