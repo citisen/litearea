@@ -94,9 +94,14 @@ export interface LiteAreaCompletion {
   /**
    * Characters that open the list in addition to word characters.
    *
-   * Default `' '`, and that default is doing real work: both reference languages
-   * put a value after a name, so a space is exactly where the next word becomes
-   * guessable.
+   * Empty by default, because a separator is the wrong moment to interrupt: it is
+   * where the next token starts, which is the argument FOR opening there, and it
+   * loses to the habit every reader already has — the editor this is modelled on
+   * offers nothing on a space and waits for a letter or for `Ctrl+Space`. Nothing
+   * is stranded by that. The list stays open once it is open, so a value typed
+   * after a name is still filtered in place, and `Ctrl+Space` opens it on demand.
+   * Set it to `' '` or `','` for a language where a separator really is where the
+   * next token becomes guessable.
    */
   triggerCharacters?: string
   /** The most rows to offer. Default 100. */
@@ -289,11 +294,16 @@ export class LiteArea<State = unknown> {
       { autoGrow: true, minRows: 1 },
       options.sizing as Partial<ResolvedSizing> | undefined,
     )
+    // A word character opens the list; a separator does not, unless the grammar's
+    // host asks for one by name. The list does not need a separator to be helpful
+    // — it is already open while the next token is typed, and it re-filters in
+    // place — and opening on a space spends the one keystroke a reader is least
+    // willing to have interrupted.
     this.completion =
       options.completion === false
         ? undefined
         : withDefaults<ResolvedCompletion>(
-            { auto: true, triggerCharacters: ' ', limit: 100, showDocumentation: true },
+            { auto: true, triggerCharacters: '', limit: 100, showDocumentation: true },
             options.completion,
           )
     this.hover =

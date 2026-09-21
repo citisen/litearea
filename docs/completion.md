@@ -34,7 +34,7 @@ two bugs that make a completer feel broken have somewhere to live:
 | Event | What happens |
 | --- | --- |
 | A word character is typed | The list opens, in `'auto'` mode. The predicate is the grammar's `wordChars` |
-| A character typed through `triggerCharacters` | The list opens, in `'auto'` mode. Default `' '`, and that default is doing real work: a value usually follows a name, so a space is exactly where the next word becomes guessable |
+| A character typed through `triggerCharacters` | Also opens it, in `'auto'` mode. **Empty by default**, so a separator does not open the list — see below |
 | More characters are typed while the list is open | Re-resolved: the same source answers again if it is still eligible, the range is recomputed from the caret, and the rows are re-filtered |
 | A character is deleted while the list is open | Re-filtered. A backspace with no list open opens nothing, because a deletion is not a request for suggestions |
 | `Ctrl+Space` / `Cmd+Space` | Opens with no needle (`'explicit'`), or closes the list when it is already open |
@@ -44,6 +44,14 @@ two bugs that make a completer feel broken have somewhere to live:
 | An IME composition starts | The list closes and no completion runs until the composition ends |
 | The editor itself is writing | Nothing re-opens: the editor knows its own edit from the user's |
 | Any `input` event while `readOnly` | Nothing |
+
+`triggerCharacters` is empty by default, so a separator does not open the list. A
+space is where the next token starts, which is the argument for opening there,
+and it loses to the habit a reader already has: the editor this is modelled on
+offers nothing on a space and waits for a letter or for `Ctrl+Space`. Nothing is
+stranded by it — the list stays open while the next token is typed, so a value
+after a name is still suggested in place — and a language whose separator really
+is the moment the next token becomes guessable names it explicitly.
 
 `auto: false` (or `completion: false` on the editor) switches off every row above
 except `Ctrl+Space`, `Escape`, and the arrows; `showCompletions()` and
@@ -276,7 +284,7 @@ default would be guessing about every other language.
 
 | VSCode | litearea |
 | --- | --- |
-| Typing triggers suggestions | A word character or one of `triggerCharacters` (default `' '`) opens the list; `auto: false` turns it off |
+| Typing triggers suggestions | A word character or one of `triggerCharacters` (empty by default) opens the list; `auto: false` turns it off |
 | `Ctrl+Space` | `Ctrl+Space`/`Cmd+Space` opens on demand, and closes when the list is already open |
 | Typing filters the list | The needle is the text between the source's current range start and the caret, matched fuzzily |
 | `Enter` accepts | `Enter` accepts the active row |

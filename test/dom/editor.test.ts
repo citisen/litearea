@@ -340,6 +340,19 @@ describe('the completion list', () => {
     editor.destroy()
   })
 
+  it('does not open on a space by default, and a word character still does', () => {
+    const editor = mount({ value: 'alpha' })
+    editor.focus()
+    type(editor, ' ')
+    expect(editor.currentCompletion).toBeUndefined()
+    // Nothing is stranded by that. The list opens on the next word character, and
+    // Ctrl+Space opens it whenever the reader asks.
+    type(editor, 'b')
+    expect(editor.currentCompletion?.sourceId).toBe('names')
+    expect(rows(editor).map((row) => row.textContent)).toEqual(['beta'])
+    editor.destroy()
+  })
+
   it('opens on a declared trigger character', () => {
     const editor = mount({ value: 'alpha', completion: { triggerCharacters: ' ' } })
     editor.focus()
