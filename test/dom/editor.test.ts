@@ -304,21 +304,29 @@ describe('the completion list', () => {
   })
 
   it('accepts the active row on Tab', () => {
-    const editor = mount({ value: 'be' })
+    const changed: string[] = []
+    const editor = mount({ value: 'be', onChange: (next) => changed.push(next) })
     editor.setSelection(2)
     editor.showCompletions()
     press(editor, 'Tab')
     expect(editor.value).toBe('beta')
+    // The host is told. Accepting a row is the user's edit, and the pipeline's own
+    // `input` event is swallowed while the editor is applying it — so a host that
+    // stores what it is told would keep `be` while the field reads `beta`, and the
+    // next time it seeded the field the completion would be gone.
+    expect(changed).toEqual(['beta'])
     editor.destroy()
   })
 
   it('accepts a row picked with the mouse', () => {
-    const editor = mount({ value: 'ga' })
+    const changed: string[] = []
+    const editor = mount({ value: 'ga', onChange: (next) => changed.push(next) })
     editor.setSelection(2)
     editor.showCompletions()
     const row = rows(editor)[0]
     row?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     expect(editor.value).toBe('gamma')
+    expect(changed).toEqual(['gamma'])
     editor.destroy()
   })
 

@@ -494,10 +494,14 @@ change colour, background, and `text-decoration`, and nothing that moves a glyph
 - **The layer's typography is fixed to one monospace face and ligatures are off.**
   A ligature draws one glyph in the layer where the field draws two, so every
   character after it would be painted in the wrong place.
-- **`onChange` reports the user's edits only.** Every write the library performs — a
-  completion, or `setValue` in either mode — is marked as its own before it happens,
-  so the caller is never handed its own change back. The React `value` prop goes
-  through `setValue`, so it is silent too.
+- **`onChange` reports the user's edits, including an accepted completion.** Every
+  write the library performs by itself — the initial text, and `setValue` in either
+  mode — is marked as its own before it happens, so the caller is never handed its own
+  change back. Accepting a row is the user's edit rather than the library's, so it is
+  announced. Up to `0.2.1` it was not: the `input` event that carried the completion was
+  swallowed by that same mark, so a host that stores what it is told kept the word from
+  before the keystroke — type `alw`, press Tab, close the panel, reopen, and the field
+  read `alw` while the user had watched it become `always`.
 - **`onDiagnostics` fires once when the editor mounts**, even when the document is
   clean, and then only when the problem list really changed — compared on position,
   code, and message. A host waiting to be told its list was clear therefore hears it.

@@ -4,14 +4,28 @@ The runbook for changing the library and getting it to users. For the *why*
 behind the setup (and what it does not protect against), see
 [PUBLISHING.md](PUBLISHING.md).
 
-The current release is **0.2.0**, and it went out the way this document
-describes: a commit, a tag, a CI stage, and a human approval with 2FA. The one
-release that predates all of that is `0.1.0`, published by hand because a
-trusted publisher lives on the package's own settings page and a package that
-does not exist yet has no settings page. That bootstrap is done and is kept
-below as history — every release from here on goes through CI staging plus an
-approval, and a local `npm publish` failing is then the setup working rather
-than the setup broken.
+The published release is **0.2.1**, and **0.2.2** is the one this document is
+currently walking through: it announces an accepted completion through `onChange`,
+which until now was silent (the README's contract list said so, and now says the
+opposite). Both went out the way this document describes: a commit, a tag, a CI
+stage, and a human approval with 2FA. The one release that predates all of that is
+`0.1.0`, published by hand because a trusted publisher lives on the package's own
+settings page and a package that does not exist yet has no settings page. That
+bootstrap is done and is kept below as history — every release from here on goes
+through CI staging plus an approval, and a local `npm publish` failing is then the
+setup working rather than the setup broken.
+
+**What `0.2.2` fixes.** Accepting a completion is the user's edit, but the engine
+marked every write it performed as its own before making it — the rule that keeps a
+caller from being handed its own `setValue` back — and the completion went through
+the same mark. The `input` event it fired was therefore swallowed and never reached
+`onChange`. A host that stores what it is told kept the text from *before* the
+keystroke: type `alw`, press Tab, close the panel, reopen, and the field reads `alw`
+while the user watched it become `always`. This was reported against
+`@citisen/dsh-sentry` and `@citisen/dsh-font`, which both edit a document in this
+editor and both persisted the half-typed word. The engine's own tests now assert the
+notification for Tab and for the mouse pick, and those two assertions fail without
+the fix.
 
 ## The short version
 
