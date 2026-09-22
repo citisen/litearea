@@ -802,6 +802,7 @@ export class LiteArea<State = unknown> {
     const row: SuggestionItem | undefined = this.popup.items[index]?.item
     if (state === undefined || row === undefined) return
     const applied = applyCompletion(this.input.value, state.range, row)
+    const before = this.input.value
     this.applying = true
     try {
       // Only the range that changed is written, and it goes through the editing
@@ -818,6 +819,14 @@ export class LiteArea<State = unknown> {
     }
     this.closeCompletion()
     this.sync()
+    // Accepting a row is the user's edit, not the editor writing to itself. The
+    // pipeline fires an `input` event, but it arrives while `applying` is set —
+    // the state that keeps a host from being handed its own `setValue` back — so it
+    // is swallowed and the completion would never be announced. A host that stores
+    // what it is told would then hold the word from before the keystroke: type
+    // `alw`, press Tab, and reading the field back gives `alw`. Announcing the
+    // result here is what keeps the field and the store holding the same text.
+    if (this.input.value !== before) this.handlers.onChange?.(this.input.value)
     const inspection = this.current
     if (inspection !== undefined) {
       this.grammar.grammar.onAccept?.({
