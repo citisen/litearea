@@ -143,11 +143,16 @@ describe('sticky headers', () => {
   it('pins the header of a block that has scrolled out of sight', () => {
     // Line 0 is at 40, the visible top is 100: it is above the fold, and the block it
     // names runs to line 4 at 120, so the reader is still inside it.
+    //
+    // The row's offset is measured from the box's PADDING box, which this stub puts one
+    // pixel below its border box because the injected stylesheet gives the box a 1px
+    // border — that pixel is what an absolutely positioned child is offset from, and
+    // getting it wrong is what made a pinned row sit a pixel off its own text.
     const editor = mount(() => [{ kind: 'block', from: 0, to: TEXT.length }])
     const pinned = rows(editor)
     expect(pinned).toHaveLength(1)
     expect(pinned[0]?.textContent).toBe('alpha')
-    expect(topOf(pinned[0] as HTMLElement)).toBe(0)
+    expect(topOf(pinned[0] as HTMLElement)).toBe(-1)
     editor.destroy()
   })
 

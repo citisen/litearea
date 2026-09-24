@@ -38,6 +38,30 @@ export function hasCaretHitTest(): boolean {
 }
 
 /**
+ * The top-left corner of an element's PADDING box, in client coordinates.
+ *
+ * This exists because absolutely positioned children are offset from their containing
+ * block's padding box, not its border box — and every element this library positions that
+ * way (the sticky strip's rows, the inline preview) is a child of the box, which has a one
+ * pixel border. Measuring the border box instead put both a pixel low: invisible in a
+ * popup placed below the caret, and plainly visible in a line of text that has to line up
+ * with the line beside it. The correction is one call rather than a comment everybody has
+ * to remember.
+ *
+ * @param element - the containing block.
+ * @returns the client coordinates a child's offsets are measured from.
+ */
+export function paddingBoxOf(element: Element): { left: number; top: number } {
+  const rect = element.getBoundingClientRect()
+  const view = element.ownerDocument?.defaultView ?? null
+  if (view === null) return { left: rect.left, top: rect.top }
+  const styles = view.getComputedStyle(element)
+  const borderLeft = Number.parseFloat(styles.borderLeftWidth) || 0
+  const borderTop = Number.parseFloat(styles.borderTopWidth) || 0
+  return { left: rect.left + borderLeft, top: rect.top + borderTop }
+}
+
+/**
  * The character offset a point in the viewport falls on, according to the browser.
  *
  * The browser is asked rather than the editor computing it, because hit-testing

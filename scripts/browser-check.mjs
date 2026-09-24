@@ -828,8 +828,12 @@ const CHECKLIST = String.raw`
               JSON.stringify(row.textContent) + ')',
           )
           check(
-            Math.abs(at.top - box.top) <= 2,
-            'the pinned row must sit on the top edge of the box (row ' + at.top + ', box ' + box.top + ')',
+            // Against the LAYER's top, which is where the paint begins, and to half a
+            // pixel: the row's whole job is to line up with the text it stands in for, so
+            // a tolerance that swallows a pixel is a tolerance that hides the bug.
+            Math.abs(at.top - layerOf(pinnedEditor).getBoundingClientRect().top) <= 0.5,
+            'the pinned row must sit on the top edge of the paint (row ' + at.top +
+              ', layer ' + layerOf(pinnedEditor).getBoundingClientRect().top + ')',
           )
           check(
             Math.abs(at.height - 20) <= 6,
@@ -895,15 +899,36 @@ const CHECKLIST = String.raw`
           if (typedSpan !== undefined) {
             const typedBox = typedSpan.getBoundingClientRect()
             const ghostBox = ghost.getBoundingClientRect()
+            // The comparison has to be glyph to glyph. A bounding rect on an inline box
+            // reports the font's CONTENT area while a positioned block reports the LINE
+            // box it was given — two different rectangles, which is how a pixel of
+            // misalignment passed a check that compared them, with a tolerance that
+            // swallowed exactly the error being looked for.
+            const ghostGlyphs = document.createRange()
+            ghostGlyphs.selectNodeContents(ghost)
+            const ghostText = ghostGlyphs.getBoundingClientRect()
             check(
-              Math.abs(ghostBox.left - typedBox.right) <= 2,
-              'the preview must start where the next character would land (preview ' +
-                ghostBox.left + ', caret ' + typedBox.right + ')',
+              Math.abs(ghostText.top - typedBox.top) <= 0.5,
+              'the preview glyphs must sit on the painted line (preview ' + ghostText.top +
+                ', line ' + typedBox.top + ')',
             )
             check(
-              Math.abs(ghostBox.top - typedBox.top) <= 2,
-              'the preview must sit on the caret line (preview ' + ghostBox.top +
-                ', line ' + typedBox.top + ')',
+              Math.abs(ghostText.height - typedBox.height) <= 0.5,
+              'the preview must be painted at the same size as the text it continues (preview ' +
+                ghostText.height + ', line ' + typedBox.height + ')',
+            )
+            check(
+              Math.abs(ghostText.left - typedBox.right) <= 1,
+              'the preview must start where the next character would land (preview ' +
+                ghostText.left + ', caret ' + typedBox.right + ')',
+            )
+            // And the chip covers the whole line, so it does not read as a smaller thing
+            // floating inside it.
+            const paintLineHeight = Number.parseFloat(getComputedStyle(paintOf(previewed)).lineHeight)
+            check(
+              Math.abs(ghostBox.height - paintLineHeight) <= 0.5,
+              'the preview box must be one line tall (box ' + ghostBox.height +
+                ', line ' + paintLineHeight + ')',
             )
           }
           check(

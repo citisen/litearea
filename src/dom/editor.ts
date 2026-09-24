@@ -66,11 +66,12 @@ import {
 } from './editing.js'
 import { TextMirror } from './mirror.js'
 import { Overlay } from './overlay.js'
+import { PaintReader } from './paint.js'
 import { Popup } from './popup.js'
 import { Ghost } from './ghost.js'
 import { StickyHeaders } from './sticky.js'
 import { Tooltip } from './tooltip.js'
-import { withDefaults } from './support.js'
+import { withDefaults, paddingBoxOf } from './support.js'
 
 /** How the box follows its content. */
 export interface LiteAreaSizing {
@@ -396,6 +397,8 @@ export class LiteArea<State = unknown> {
   private readonly sticky: LiteAreaSticky | undefined
   private readonly stickyHeaders: StickyHeaders | undefined
   private readonly ghost: Ghost | undefined
+  /** Where the painted lines are, shared by the pinned rows and the inline preview. */
+  private readonly paintReader: PaintReader
   /** The delimiter pairs and comment markers the language declared. */
   private readonly pairs: readonly AutoPair[]
   private readonly comments: CommentSyntax | undefined
@@ -521,6 +524,7 @@ export class LiteArea<State = unknown> {
     if (options.readOnly === true) this.element.classList.add('litearea-readonly')
     if (options.variables !== undefined) this.applyVariables(options.variables)
 
+    this.paintReader = new PaintReader(this.document)
     this.box = this.document.createElement('div')
     this.box.className = 'litearea-box'
     this.element.appendChild(this.box)
@@ -914,7 +918,7 @@ export class LiteArea<State = unknown> {
         }))
       this.stickyBlocks = buildStickyBlocks(ranges, lineStarts(inspection.text))
       this.stickySource = inspection
-      headers.invalidate()
+      this.paintReader.invalidate()
     }
 
     if (this.stickyBlocks.length === 0) {
@@ -923,9 +927,10 @@ export class LiteArea<State = unknown> {
     }
 
     const layer = this.overlay.element.getBoundingClientRect()
+    this.paintReader.read(this.overlay.paintElement, inspection.text)
     headers.render({
       text: inspection.text,
-      paint: this.overlay.paintElement,
+      reader: this.paintReader,
       container: this.box,
       view: { top: layer.top, bottom: layer.bottom },
       blocks: this.stickyBlocks,
@@ -1098,6 +1103,14 @@ export class LiteArea<State = unknown> {
    * Called wherever the caret or the active row can have moved, because the preview is
    * a function of both: the same row previews a different suffix as the reader types,
    * and the same suffix belongs at a different place as the caret moves.
+   *
+   * The position comes from the PAINT and not from the mirror, and that is a fix rather
+   * than a preference. Measured in Chrome, the painted prefix's glyphs and the mirror's
+   * marker sit one pixel apart — invisible under a popup placed below the caret, which is
+   * what the mirror is for, and plainly visible in a chip of text that has to continue the
+   * painted word. The mirror stays the source for the popup and for the one case the paint
+   * cannot answer: a line with nothing painted on it has no glyphs to sit beside, so the
+   * prediction of the field's caret is the only measurement there is.
    */
   private syncGhost(): void {
     const ghost = this.ghost
@@ -1107,20 +1120,38 @@ export class LiteArea<State = unknown> {
       ghost.hide()
       return
     }
-    const box = this.mirror.caretBox(this.input, this.caret())
+
+    const caret = this.caret()
+    const lineHeight = this.mirror.lineHeight(this.input)
+    this.paintReader.read(this.overlay.paintElement, this.input.value)
+    const glyphs = this.paintReader.lineBoxAt(caret)
+    const x = this.paintReader.caretX(caret)
+    const origin = paddingBoxOf(this.box)
+
+    if (glyphs !== undefined && x !== undefined) {
+      // The row's box is its LINE box: the chip is given the line's full height and the
+      // leading is taken off the top, so its glyphs land where the painted ones are
+      // rather than a pixel low inside a box the height of the font.
+      const glyphHeight = glyphs.bottom - glyphs.top
+      const lead = Math.max(0, lineHeight - glyphHeight) / 2
+      ghost.show(suffix, {
+        x: x - origin.left,
+        y: glyphs.top - lead - origin.top,
+        height: lineHeight,
+      })
+      return
+    }
+
+    const box = this.mirror.caretBox(this.input, caret)
     if (box === undefined) {
       ghost.hide()
       return
     }
-    // The mirror reports relative to the field's border box and the preview is placed
-    // against the wrapper, so both rects are measured rather than `offsetLeft`
-    // arithmetic — the same reason the popup does it this way.
-    const inputRect = this.input.getBoundingClientRect()
-    const elementRect = this.element.getBoundingClientRect()
+    const field = this.input.getBoundingClientRect()
     ghost.show(suffix, {
-      x: inputRect.left - elementRect.left + box.x,
-      y: inputRect.top - elementRect.top + box.y,
-      height: box.height,
+      x: field.left + box.x - origin.left,
+      y: field.top + box.y - origin.top,
+      height: lineHeight,
     })
   }
 

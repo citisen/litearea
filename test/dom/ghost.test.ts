@@ -34,6 +34,29 @@ function measure(): void {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400)
 }
 
+/**
+ * A painted line, for the tests that need the preview to read the paint.
+ *
+ * The glyph box is deliberately SHORTER than the line: that is the whole bug this stubs,
+ * since a font's content box is not the line box it sits in.
+ */
+function measurePaint(glyph: { top: number; bottom: number; left: number; right: number }): void {
+  vi.spyOn(Range.prototype, 'getBoundingClientRect').mockImplementation(
+    () =>
+      ({
+        x: glyph.left,
+        y: glyph.top,
+        top: glyph.top,
+        bottom: glyph.bottom,
+        left: glyph.left,
+        right: glyph.right,
+        width: glyph.right - glyph.left,
+        height: glyph.bottom - glyph.top,
+        toJSON: () => ({}),
+      }) as DOMRect,
+  )
+}
+
 /** A grammar offering two words, one of which the fixture document does not prefix. */
 function grammar() {
   return defineGrammar({
@@ -133,6 +156,46 @@ describe('the inline preview', () => {
     expect(ghost.style.left).toMatch(/px$/)
     expect(ghost.style.top).toMatch(/px$/)
     expect(Number.parseFloat(ghost.style.height)).toBeGreaterThan(0)
+    editor.destroy()
+  })
+
+  it('sits on the painted LINE, not on the font’s box', () => {
+    // The report this test exists for: the preview looked one or two pixels low. The chip
+    // was placed from the mirror — the field's predicted caret — while the text it has to
+    // continue is painted by a different element, and the two disagree by a pixel. It was
+    // also given the glyph box's height (15) instead of the line's (20), so its background
+    // was short as well as low.
+    //
+    // The paint is 20px lines of 16px glyphs whose box starts at 110, inside a box whose
+    // top is 100 and whose 1px border puts its PADDING box — what an absolutely
+    // positioned child is offset from — at 101. So the line box begins at 108 and the
+    // chip belongs at 7px, not 8: that pixel is the border, and forgetting it is the same
+    // bug in the other direction.
+    measurePaint({ top: 110, bottom: 126, left: 40, right: 60 })
+    const editor = mount('cir', true)
+    const ghost = ghostOf(editor) as HTMLElement
+    expect(ghost.dataset.open).toBe('true')
+    expect(ghost.style.top).toBe('7px')
+    expect(ghost.style.height).toBe('20px')
+    // The x is where the glyph AFTER the caret begins, which is the right edge of the
+    // painted prefix, not its left.
+    expect(ghost.style.left).toBe('59px')
+    editor.destroy()
+  })
+
+  it('falls back to the field’s caret when the line has nothing painted', () => {
+    // A line with no glyphs has no box to read, and the preview must still appear: the
+    // mirror's prediction is the only measurement there is. This stubs empty ranges, so
+    // the fallback is what puts the chip at the field's own content edge rather than on a
+    // painted line — and the height is the line height either way.
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ height: 0, width: 0, top: 0, bottom: 0, left: 0, right: 0, toJSON: () => ({}) }) as DOMRect,
+    )
+    const editor = mount('cir', true)
+    const ghost = ghostOf(editor) as HTMLElement
+    expect(ghost.dataset.open).toBe('true')
+    expect(ghost.style.top).toBe('-1px')
+    expect(ghost.style.height).toBe('20px')
     editor.destroy()
   })
 

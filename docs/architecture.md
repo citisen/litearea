@@ -162,6 +162,31 @@ scrollbar — and comparing the offsets, the scrollable heights, and the wrappin
 widths. Neither is visible to a unit test: `happy-dom` lays nothing out, which is
 how the library shipped both for as long as it did.
 
+**A rect is not a rect.** Two misalignments of the same kind are worth naming
+together, because both come from reading the wrong rectangle rather than from
+wrapping or fonts:
+
+- An inline box's `getBoundingClientRect` reports the font's CONTENT area, not the LINE
+  box it sits in — about 15px against 20px, with the leading split above and below. The
+  caret's box is reported honestly as what it is, and a caller placing one line of text
+  against another corrects by half the leading (`mirror.caretBox` returns the line box
+  for the height, and the callers that draw text apply the correction). A popup below the
+  caret does not care; a chip of text that has to line up with the text beside it cares
+  very much, and comparing the two kinds of rect in a test is how a pixel of error goes
+  unnoticed.
+- Absolutely positioned children are offset from their containing block's **padding
+  box**, not its border box, and the box has a one pixel border. The sticky rows and the
+  inline preview are both children of it, so both were a pixel low until
+  `paddingBoxOf` made the correction a call rather than a comment.
+
+**Everything that has to sit ON the paint is measured FROM the paint.** Where a line
+landed is `dom/paint.ts`'s question — a `Range` over the line's characters, one walk of
+the painted text nodes, cached until the paint changes — and both the pinned rows and the
+inline preview ask it. The mirror is for the field: it predicts the caret, which is what a
+popup below the caret wants and what a chip that must continue the painted word does not,
+since the two differ by about a pixel. The one case the paint cannot answer is a line with
+nothing painted on it, and there the mirror still stands.
+
 ## The mirror
 
 Two measurements are needed and the field cannot supply either:
@@ -282,6 +307,7 @@ and a grammar go in, values come out:
 | `planPairTyping`, `planBracketEnter`, `planCommentToggle`: what a keystroke, an Enter, and a comment toggle should do to the text | Whether the resulting edit is one undoable edit — every one of them is applied through the browser's pipeline, and only a real history can say |
 | `planIndent`: what a level of indentation does to a caret or to a block of lines | The same claim again, and the one it is easiest to get wrong: a five-line indent is one edit, so one Ctrl+Z takes it back |
 | `resolveCommand`, `matchesKey`, `keyCombo`: which command a chord asks for, and whether it matches at all | Whether the keystroke was actually taken from the browser, since a key the editor did not cancel is a key the page still gets |
+| `PaintReader`'s arithmetic: which line a caret is on, and which end of a range answers a caret | The rectangles themselves — an inline box against a line box, a padding box against a border box — which is where the two misalignments it was written for actually lived |
 
 Everything in the left column has a decision in it, and a decision is what a unit
 test asserts. Everything in the right column is a fact about a renderer. The four

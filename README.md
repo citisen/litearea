@@ -462,6 +462,14 @@ Three things it does not do, deliberately:
   draw, and draws none. `applyCompletion` computes both the preview and the edit that
   follows it, so the two cannot disagree.
 
+It is placed from the **painted layer**, not from the mirror, and that is a correction
+rather than a preference: the mirror predicts where the *field* will put the caret, and the
+field and the paint are about a pixel apart — invisible under a popup placed below the
+caret, and plainly visible in a chip of text that has to continue the painted word. The
+chip is also given the painted line's full height, so it covers a line rather than the
+font's content box. The one case the paint cannot answer is a line with nothing painted on
+it, and there the mirror's prediction is used.
+
 ## Typing aids
 
 Two optional fields on the grammar, and the editor maintains them while the reader types:
