@@ -561,6 +561,32 @@ Two things about that table are worth knowing, because they are what keeps it sm
 one of them; it is not a callback, because a host's callback could not be kept consistent
 with state the editor owns.
 
+The set is complete, and that is the point of writing it down:
+
+| Command | What it does | Applies when |
+| --- | --- | --- |
+| `indent` / `outdent` | A unit at the caret, or every line the selection touches | The list is closed |
+| `indentLines` / `outdentLines` | The same, always whole lines including the caret's | The list is closed |
+| `toggleComment` | Add or remove the language's comment markers | The list is closed |
+| `enterBracket` | Open an indented block between a declared pair | The list is closed |
+| `openList` | Open the completion list, or close it when it is already open | Completions are on |
+| `closeList` | Close the list | The list is open |
+| `acceptRow` | Take the active row | The list is open |
+| `moveRowUp` / `moveRowDown` / `moveRowPageUp` / `moveRowPageDown` | Move the active row | The list is open |
+| `hideTooltip` | Hide the tooltip | Always |
+| `ignore` | Nothing, and the key goes back to the browser | Always |
+
+Only two things read a keystroke and are not a binding, and both are deliberate:
+
+- **A key that moved the caret** closes a list the caret has walked out of. No key is
+  named for this — not the arrows, not Home or End — because the key is beside the point:
+  the editor asks whether the caret is still inside the range the list was opened over,
+  so `Ctrl+Arrow`, a word jump, and anything bound later are covered.
+- **A completion row's `commitCharacters`** take a keystroke while a list is open. They
+  are the row's own data — a completion source declares them and nothing has any by
+  default — so there is no chord to bind; `completion: { commitCharacters: false }`
+  switches the behaviour off for the whole editor instead.
+
 ## Keyboard
 
 Everything the editor intercepts, and what it deliberately leaves alone:
@@ -571,12 +597,12 @@ Everything the editor intercepts, and what it deliberately leaves alone:
 | `PageDown` / `PageUp` | Move the active row by eight |
 | `Enter` | Accept the active row; with no list open, open an indented block between a declared pair |
 | `Tab` | Accept the active row. **Not** indent — see above |
-| `Escape` | Close the list; with no list open, hide the tooltip |
+| `Escape` | Close the list; with no list open, hide the tooltip. Two commands (`closeList`, `hideTooltip`), so either half can be rebound on its own |
 | `Ctrl+Space` / `Cmd+Space` | Open the list, or close it when it is already open |
 | `Ctrl+/` / `Cmd+/` | Toggle the language's comment markers |
-| a row's `commitCharacters` | Accept the active row and write the character after it, so the keystroke is not swallowed. The list then closes |
+| a row's `commitCharacters` | Accept the active row and write the character after it, so the keystroke is not swallowed. The list then closes. Switch the whole behaviour off with `completion: { commitCharacters: false }` |
 | `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y` | **Not intercepted.** These are the browser's own undo and redo on the field, which is the whole point of being uncontrolled |
-| `Shift+Arrow`, `Home`, `End` | Not intercepted. They move the caret without an `input` event, so the editor just closes a list the caret has walked out of |
+| `Shift+Arrow`, `Home`, `End` | Not intercepted. They move the caret, and the editor then closes a list the caret has walked out of |
 
 `defaultKeys` — the value, not a copy — is what that table describes, and
 `keyCombo(event)` writes a press the way a binding spells it, which is what a host needs
@@ -686,9 +712,9 @@ change colour, background, and `text-decoration`, and nothing that moves a glyph
 - **`onDiagnostics` fires once when the editor mounts**, even when the document is
   clean, and then only when the problem list really changed — compared on position,
   code, and message. A host waiting to be told its list was clear therefore hears it.
-- **In the React binding, `sizing`, `completion`, `hover`, `decorations`,
-  `injectStyles`, and `styleNonce` are read when the editor mounts.** Changing
-  one of them later re-renders the wrapper and nothing else. Only `grammar`,
+- **In the React binding, `sizing`, `completion`, `hover`, `sticky`, `indent`, `keys`,
+  `decorations`, `injectStyles`, and `styleNonce` are read when the editor mounts.**
+  Changing one of them later re-renders the wrapper and nothing else. Only `grammar`,
   `value`, and `readOnly` are re-read on every render, and only the grammar is
   safe to rebuild on every render (`refresh()` re-resolves it without rebuilding
   the element, which is what keeps the undo history across a language change).

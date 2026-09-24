@@ -130,6 +130,14 @@ export interface LiteAreaCompletion {
    * such as `rd` for `rounded` — has no suffix to preview, and shows none.
    */
   inline?: boolean
+  /**
+   * Whether a row's `commitCharacters` may take a keystroke. Default `true`.
+   *
+   * The characters themselves are the row's data — a completion source declares them,
+   * and nothing has any by default — so this is the switch a host has when it wants the
+   * editor to keep its hands off typed characters entirely.
+   */
+  commitCharacters?: boolean
 }
 
 /** How the hover tooltip behaves. */
@@ -209,8 +217,8 @@ export type LiteAreaCommand =
   | 'moveRowDown'
   | 'moveRowPageUp'
   | 'moveRowPageDown'
-  /** Close the list, or hide the tooltip when no list is open. */
-  | 'escape'
+  /** Hide the tooltip. */
+  | 'hideTooltip'
   /** Open an indented block between a declared pair. */
   | 'enterBracket'
   /** Do nothing, and let the key belong to the browser. */
@@ -333,7 +341,10 @@ export const DEFAULT_KEYS: readonly KeyBinding<LiteAreaCommand>[] = [
   { key: 'ArrowUp', command: 'moveRowUp' },
   { key: 'PageDown', command: 'moveRowPageDown' },
   { key: 'PageUp', command: 'moveRowPageUp' },
-  { key: 'Escape', command: 'escape' },
+  // Escape is two commands and not one, so a host may take either half: closing a list
+  // and dismissing a tooltip are different things, and the eligibility rule picks.
+  { key: 'Escape', command: 'closeList' },
+  { key: 'Escape', command: 'hideTooltip' },
   { key: 'Mod+Space', command: 'openList' },
   { key: 'Mod+/', command: 'toggleComment' },
   { key: 'Enter', command: 'enterBracket' },
@@ -472,7 +483,14 @@ export class LiteArea<State = unknown> {
       options.completion === false
         ? undefined
         : withDefaults<ResolvedCompletion>(
-            { auto: true, triggerCharacters: '', limit: 100, showDocumentation: true, inline: false },
+            {
+              auto: true,
+              triggerCharacters: '',
+              limit: 100,
+              showDocumentation: true,
+              inline: false,
+              commitCharacters: true,
+            },
             options.completion,
           )
     this.hover =
@@ -1429,7 +1447,7 @@ export class LiteArea<State = unknown> {
   private commandApplies(command: LiteAreaCommand): boolean {
     switch (command) {
       case 'ignore':
-      case 'escape':
+      case 'hideTooltip':
         return true
       case 'openList':
         return this.completion !== undefined
@@ -1487,11 +1505,9 @@ export class LiteArea<State = unknown> {
       case 'closeList':
         this.closeCompletion()
         return true
-      case 'escape':
-        if (this.popup.isOpen) {
-          this.closeCompletion()
-          return true
-        }
+      case 'hideTooltip':
+        // Never takes the key: a tooltip that was not on screen has nothing to dismiss,
+        // and the keystroke belongs to the browser in that case.
         this.hideTooltip()
         return false
       case 'ignore':
@@ -1553,11 +1569,20 @@ export class LiteArea<State = unknown> {
    * Typing `=` at the end of `shape` takes the `shape=` row and keeps the
    * character, rather than either swallowing the keystroke or leaving the row to be
    * clicked. A row opts in; nothing has a commit character by default.
+   *
+   * This is the one piece of key handling that is not in the binding table, and it is
+   * not there because there is nothing to bind: the characters belong to the ROW — they
+   * are data a completion source declares — and a table entry cannot name a set that
+   * only exists once a list is open. A host controls it in the two places it can: what
+   * its sources declare, and `completion.commitCharacters` to switch the behaviour off
+   * for the whole editor.
+   *
    * @param event - the key event.
    * @returns whether the keystroke was consumed.
    */
   private commitCharacter(event: KeyboardEvent): boolean {
     if (!this.popup.isOpen) return false
+    if (this.completion?.commitCharacters === false) return false
     if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return false
     const characters = this.popup.activeRow?.item.commitCharacters
     if (characters === undefined || !characters.includes(event.key)) return false
@@ -1589,13 +1614,17 @@ export class LiteArea<State = unknown> {
     this.handlers.onSelectionChange?.(readSelection(this.input))
   }
 
-  private readonly onKeyUp = (event: KeyboardEvent): void => {
-    // Shift+Arrow and Home/End move the caret without an `input` event, and a list
-    // left open over a caret that has walked out of its range would complete the
-    // wrong thing.
-    if (event.key.startsWith('Arrow') || event.key === 'Home' || event.key === 'End') {
-      this.updateCompletionForCaret()
-    }
+  /**
+   * Close a list the caret has walked out of, whatever key moved it.
+   *
+   * This used to name the keys it cared about — the arrows, Home, End — and that list was
+   * both incomplete and beside the point. What matters is not WHICH key moved the caret
+   * but that the caret left the range the list was opened over, and the editor can see
+   * that directly. `Ctrl+Arrow`, a word jump, and anything a host binds later are all
+   * covered by asking the question the right way round.
+   */
+  private readonly onKeyUp = (): void => {
+    this.updateCompletionForCaret()
   }
 
   private readonly onSelectionChange = (): void => {

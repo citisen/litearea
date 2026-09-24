@@ -10,9 +10,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEditor } from '../../src/dom/create.js'
-import type { LiteArea, LiteAreaOptions } from '../../src/dom/editor.js'
+import { DEFAULT_KEYS, type LiteArea, type LiteAreaCommand, type LiteAreaOptions } from '../../src/dom/editor.js'
 import { defineGrammar } from '../../src/core/grammar.js'
 import { defineVocabulary } from '../../src/core/vocabulary.js'
+import { resolveCommand } from '../../src/core/keys.js'
 
 /** A language with one vocabulary, one comment marker, and one completion source. */
 function grammar() {
@@ -34,9 +35,9 @@ function grammar() {
         id: 'names',
         range: (context) => context.word,
         items: () => [
-          { label: 'alpha' },
-          { label: 'beta' },
-          { label: 'gamma' },
+          { label: 'alpha', commitCharacters: '=' },
+          { label: 'beta', commitCharacters: '=' },
+          { label: 'gamma', commitCharacters: '=' },
         ],
       },
     ],
@@ -235,5 +236,75 @@ describe('the keymap', () => {
     editor.setSelection(1)
     press(editor, 'Enter')
     expect(editor.value).toBe('{\n\t\n}')
+  })
+})
+
+describe('what is left outside the table', () => {
+  it('resolves the default Escape through eligibility, as two commands', () => {
+    // One key, two rows, and the editor's state decides — which is what makes either
+    // half of Escape rebindable on its own.
+    const open = (command: LiteAreaCommand): boolean => command === 'closeList'
+    const closed = (command: LiteAreaCommand): boolean => command === 'hideTooltip'
+    expect(resolveCommand(DEFAULT_KEYS, { key: 'Escape' }, open)).toBe('closeList')
+    expect(resolveCommand(DEFAULT_KEYS, { key: 'Escape' }, closed)).toBe('hideTooltip')
+  })
+
+  it('lets a host take half of Escape and leave the other half', () => {
+    const editor = open({
+      value: 'al',
+      // Only the tooltip half: Escape no longer closes the list.
+      keys: [{ key: 'Escape', command: 'hideTooltip' }],
+    })
+    editor.focus()
+    editor.setSelection(2)
+    editor.showCompletions()
+    expect(editor.currentCompletion).toBeDefined()
+    press(editor, 'Escape')
+    expect(editor.currentCompletion).toBeDefined()
+  })
+
+  it('closes the list when the caret walks out, whichever key moved it', () => {
+    // The key is not what matters, so none is named: `x` moves nothing, but the caret
+    // has been put outside the range the list was opened over, and that is the question.
+    const editor = open({ value: 'alpha beta' })
+    editor.focus()
+    editor.setSelection(3)
+    editor.showCompletions()
+    expect(editor.currentCompletion).toBeDefined()
+    editor.setSelection(10)
+    editor.input.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', bubbles: true }))
+    expect(editor.currentCompletion).toBeUndefined()
+  })
+
+  it('keeps the list while the caret is still inside its range', () => {
+    const editor = open({ value: 'alpha' })
+    editor.focus()
+    editor.setSelection(3)
+    editor.showCompletions()
+    editor.setSelection(4)
+    editor.input.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', bubbles: true }))
+    expect(editor.currentCompletion).toBeDefined()
+  })
+
+  it('takes a commit character when the rows declare one', () => {
+    const editor = open({ value: 'al' })
+    editor.focus()
+    editor.setSelection(2)
+    editor.showCompletions()
+    expect(press(editor, '=')).toBe(true)
+    expect(editor.value).toBe('alpha=')
+  })
+
+  it('leaves a commit character alone when the host switched them off', () => {
+    // The one piece of key handling outside the table. There is nothing to bind — the
+    // characters are the ROW's data and only exist while a list is open — so the switch
+    // is on the option instead, and this is the switch working.
+    const editor = open({ value: 'al', completion: { commitCharacters: false } })
+    editor.focus()
+    editor.setSelection(2)
+    editor.showCompletions()
+    expect(press(editor, '=')).toBe(false)
+    expect(editor.value).toBe('al')
+    expect(editor.currentCompletion).toBeDefined()
   })
 })

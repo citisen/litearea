@@ -21,11 +21,21 @@
 import * as React from 'react'
 import type { Completion, Diagnostic, Grammar, HoverInfo } from '../core/types.js'
 import type { ResolvedGrammar } from '../core/scan.js'
-import { LiteArea, type LiteAreaCompletion, type LiteAreaHover, type LiteAreaSizing } from '../dom/editor.js'
+import {
+  LiteArea,
+  type LiteAreaCommand,
+  type LiteAreaCompletion,
+  type LiteAreaHover,
+  type LiteAreaIndent,
+  type LiteAreaOptions,
+  type LiteAreaSizing,
+  type LiteAreaSticky,
+} from '../dom/editor.js'
+import type { KeyBinding } from '../core/keys.js'
 import type { TextSelection } from '../dom/editing.js'
 
 /** Everything the React component accepts. */
-export interface LiteAreaEditorProps<State = unknown> {
+export interface LiteAreaEditorProps<State = unknown> extends MountOptions {
   /**
    * The language.
    *
@@ -77,6 +87,17 @@ export interface LiteAreaEditorProps<State = unknown> {
   completion?: LiteAreaCompletion | false
   /** How tooltips behave, or `false` to switch them off. Read when the editor mounts. */
   hover?: LiteAreaHover | false
+  /** Which decoration kinds are sticky blocks. Read when the editor mounts. */
+  sticky?: LiteAreaSticky | false
+  /** What one level of indentation is. Read when the editor mounts. */
+  indent?: LiteAreaIndent
+  /**
+   * Extra key bindings, tried before the defaults. Read when the editor mounts.
+   *
+   * The whole keymap is data, so this is the only way to move a key, add one, or hand
+   * one back to the browser (`{ key: 'Tab', command: 'ignore' }`).
+   */
+  keys?: readonly KeyBinding<LiteAreaCommand>[]
   /** Whether semantic decorations are painted. Read when the editor mounts. */
   decorations?: boolean
   /** Whether to inject the stylesheet. Read when the editor mounts. */
@@ -102,18 +123,33 @@ export interface LiteAreaEditorProps<State = unknown> {
   editorRef?: (editor: LiteArea<State> | undefined) => void
 }
 
+/**
+ * The options the editor reads once, at mount.
+ *
+ * DERIVED from the editor's own option type rather than copied out of it, and that is
+ * the whole point of writing it this way. The list used to be hand-maintained, which
+ * meant a new mount-time option was silently unreachable from React until somebody
+ * noticed — `sticky`, `indent`, and `keys` were all added to the editor and all three
+ * were missing here. `Omit` removes the ones React handles itself (the text, the
+ * language, the callbacks, the theme record) and leaves everything else, so the next
+ * option is forwarded the moment it exists.
+ */
+type MountOptions = Omit<
+  LiteAreaOptions<unknown>,
+  | 'grammar'
+  | 'value'
+  | 'readOnly'
+  | 'className'
+  | 'variables'
+  | 'onChange'
+  | 'onSelectionChange'
+  | 'onDiagnostics'
+  | 'onCompletion'
+  | 'onHover'
+>
+
 /** The props as the editor wants them, without the React-only ones. */
-interface EditorCoreProps {
-  placeholder?: string
-  spellCheck?: boolean
-  ariaLabel?: string
-  sizing?: LiteAreaSizing
-  completion?: LiteAreaCompletion | false
-  hover?: LiteAreaHover | false
-  decorations?: boolean
-  injectStyles?: boolean
-  styleNonce?: string
-}
+type EditorCoreProps = MountOptions
 
 /**
  * A view of an object that always reads the newest value.
