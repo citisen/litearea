@@ -1,0 +1,86 @@
+# Publishes the documentation site to GitHub Pages.
+#
+#   Actions -> Deploy site -> Run workflow
+#
+# THE TRIGGER IS MANUAL, AND THAT IS THE POINT. Nothing here runs on a push. The
+# site is a thing a reader sees at a URL, and a workflow that redeployed it on
+# every commit to `main` would make the published site whatever the last commit
+# happened to build — including the commits that break an example. Publishing is
+# a deliberate act, in the same way that staging a release is.
+#
+# WHAT IT PUBLISHES. `npm run site:build` renders `site/content/` and the three
+# references in `docs/` into `site/pages/`, and Vite bundles the one stylesheet
+# and the one script those pages link into `site/dist/`. Only `site/dist` is
+# uploaded, so the artifact carries the built site and nothing else — no source,
+# no node_modules, no lockfile.
+#
+# THE URL. `vite.config.ts` sets `base` to `/litearea/` for a build, which is
+# where a project page lives: https://citisen.github.io/litearea/. A custom
+# domain, or a move to a user page, changes that one string and nothing else,
+# because every link inside the site is relative.
+#
+# THE TWO JOBS. The build job runs repository code, so it holds no deployment
+# capability: `contents: read` and nothing else. The deploy job holds
+# `pages: write` and `id-token: write` and runs no repository code at all — it
+# downloads the artifact the first job produced and hands it to Pages. The split
+# is the same one `.github/workflows/stage.yml` makes, for the same reason.
+
+name: Deploy site
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The same command a maintainer runs locally, so a green run here is a
+      # statement about the site rather than about a second, CI-only pipeline.
+      - name: Build
+        run: npm run site:build
+
+      - name: Report what was built
+        run: |
+          echo "### Pages" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          find site/dist -name '*.html' | sort | sed 's|^site/dist|  |' >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          du -sh site/dist | sed 's|^|  total: |' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
