@@ -1,0 +1,1752 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   litearea — the site's one stylesheet
+
+   The site is laid out like a printed specimen sheet rather than like a product
+   page: a warm paper ground, black ink, one vermilion accent, hairline rules
+   where a framework would reach for a shadow, and a text column that is framed
+   by rules and surrounded by margin notes.
+
+   Two things are deliberate and easy to mistake for omissions:
+
+   1. There are no cards. Anything that would be a card in another documentation
+      site is a ruled row, a table, or a numbered entry, because a sheet of paper
+      does not have rounded corners and a drop shadow.
+
+   2. The body is set at 14pt — 18.67px — and the code at 12px, exactly. The mono
+      face is deliberately smaller than the body rather than matched to it, which
+      is how a printed manual sets a sample against its prose. The size is the
+      brief's, and honouring it means the inline code in a paragraph sits low and
+      small, like a footnote face. That is the intended look.
+
+   The editors on the page are litearea itself, and they are themed from the same
+   custom properties as the code samples: one palette, spent twice.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── 1 · the palette ────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  --paper: #f2eee5;
+  --paper-2: #e9e4d7;
+  --paper-3: #ded7c6;
+  --ink: #1a1712;
+  --ink-2: #565049;
+  /* The third ink is the one small print is set in — labels, code names, rail numbers — so it is
+     held to a 4.5:1 ratio against BOTH grounds it appears on rather than to what looks right.
+     At the lighter value it shipped with first it measured 3.1:1, which is legible on a good
+     screen and a grey smear on a bad one. */
+  --ink-3: #67615a;
+  --rule: rgba(26, 23, 18, 0.14);
+  --rule-2: rgba(26, 23, 18, 0.34);
+  --rule-3: rgba(26, 23, 18, 0.6);
+  --accent: #bd360d;
+  --accent-soft: rgba(189, 54, 13, 0.1);
+  --mark: rgba(189, 54, 13, 0.16);
+  --ok: #1c6b4d;
+  --grain: 0.05;
+  --grain-blend: multiply;
+
+  /* The code palette. A static sample and a live editor are coloured from the same
+     four variables, so a comment cannot be one colour in the prose and another in the
+     editor that the prose is talking about. */
+  --c-comment: #6b6457;
+  --c-keyword: #a8320c;
+  --c-string: #1c6b4d;
+  --c-regex: #0d6a6a;
+  --c-number: #8a5a12;
+  --c-type: #2f4a8f;
+  --c-property: #4a4238;
+
+  --sans: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mono-size: 12px;
+
+  --page-w: 1360px;
+  --rail-w: 200px;
+  --margin-w: 172px;
+  --gap-x: clamp(18px, 2.2vw, 44px);
+  --pad-x: clamp(16px, 3.2vw, 54px);
+  --prose-pad: clamp(18px, 2.4vw, 40px);
+  --measure: 39rem;
+  --running-h: 36px;
+}
+
+html[data-mode='ink'] {
+  color-scheme: dark;
+
+  --paper: #17140f;
+  --paper-2: #201c16;
+  --paper-3: #2a251d;
+  --ink: #ece5d6;
+  --ink-2: #a79f90;
+  --ink-3: #8f887a;
+  --rule: rgba(236, 229, 214, 0.16);
+  --rule-2: rgba(236, 229, 214, 0.34);
+  --rule-3: rgba(236, 229, 214, 0.6);
+  --accent: #ff7043;
+  --accent-soft: rgba(255, 112, 67, 0.13);
+  --mark: rgba(255, 112, 67, 0.22);
+  --ok: #6fd3a2;
+  --grain: 0.07;
+  --grain-blend: screen;
+
+  --c-comment: #968e7e;
+  --c-keyword: #ff8b5e;
+  --c-string: #7fd1a8;
+  --c-regex: #6ecfcf;
+  --c-number: #e0b155;
+  --c-type: #9fb8ff;
+  --c-property: #cfc6b4;
+}
+
+/* ─── 2 · the ground ─────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  /* The brief's size, written as it was given. 14pt is 18.67px, which is a reading
+     size rather than a screen size, and it is what gives the pages their stride. */
+  font-size: 14pt;
+  font-weight: 380;
+  font-stretch: 100%;
+  line-height: 1.62;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* A very fine grain over everything, which is what keeps a flat paper colour from
+   reading as a flat screen colour. It takes no pointer events and it is the only
+   element on the page that is fixed. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: var(--grain);
+  mix-blend-mode: var(--grain-blend);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: var(--mark);
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-2);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.19em;
+}
+
+a:hover {
+  text-decoration-color: var(--accent);
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  font-variant-ligatures: none;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 90;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  text-decoration: none;
+}
+
+.skip:focus {
+  left: 8px;
+  top: 8px;
+  color: var(--paper);
+}
+
+/* ─── 3 · small print, used everywhere ───────────────────────────────────── */
+
+.live-bar,
+.live-foot,
+.code-bar,
+.rail,
+.index-list,
+.running,
+.colophon-label,
+.search-field,
+.search-results,
+.search-note {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  line-height: 1.4;
+}
+
+/* ─── 4 · the masthead ───────────────────────────────────────────────────── */
+
+.masthead {
+  max-width: var(--page-w);
+  margin: 0 auto;
+  padding: 0 var(--pad-x);
+}
+
+.masthead-rule {
+  height: 4px;
+  background: var(--ink);
+}
+
+.masthead-row {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  padding: 20px 0 10px;
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-size: clamp(30px, 4.4vw, 52px);
+  font-weight: 520;
+  font-stretch: 88%;
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 96;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  color: var(--ink);
+  margin-right: auto;
+}
+
+.wordmark:hover {
+  color: var(--accent);
+}
+
+.wordmark-dot {
+  display: inline-block;
+  width: 0.16em;
+  height: 0.16em;
+  margin-left: 0.1em;
+  background: var(--accent);
+  vertical-align: baseline;
+}
+
+/* The two masthead controls sit together on the right and are set in the same small mono as the
+   nav below them, so the header reads as one line of furniture rather than three widgets. */
+.search-open,
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  padding: 2px 0;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.search-open:hover,
+.mode-switch:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.search-key {
+  color: var(--ink-3);
+}
+
+.search-open:hover .search-key {
+  color: inherit;
+}
+
+.mode-slash {
+  color: var(--rule-2);
+}
+
+html[data-mode='paper'] [data-mode-word='paper'],
+html[data-mode='ink'] [data-mode-word='ink'] {
+  color: var(--accent);
+}
+
+.index {
+  border-top: 1px solid var(--rule-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.index-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 26px;
+  margin: 0;
+  padding: 7px 0;
+  list-style: none;
+}
+
+.index-list a {
+  display: inline-flex;
+  text-decoration: none;
+  color: var(--ink-2);
+  padding-bottom: 1px;
+}
+
+.index-list a:hover {
+  color: var(--accent);
+}
+
+.index-list a[aria-current='page'] {
+  color: var(--ink);
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+
+/* ─── 5 · the running head ───────────────────────────────────────────────── */
+
+.running {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule-2);
+  transform: translateY(-100%);
+  transition: transform 160ms ease;
+}
+
+.running[hidden] {
+  display: block;
+}
+
+body.is-scrolled .running {
+  transform: translateY(0);
+}
+
+.running-row {
+  max-width: var(--page-w);
+  margin: 0 auto;
+  padding: 0 var(--pad-x);
+  height: var(--running-h);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.running-mark {
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.running-section {
+  margin: 0;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.running-progress {
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(var(--progress, 0));
+  transform-origin: 0 50%;
+}
+
+/* ─── 6 · the page, and the columns a page may have ──────────────────────── */
+
+.page {
+  max-width: var(--page-w);
+  margin: 0 auto;
+  padding: 0 var(--pad-x);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--gap-x);
+}
+
+.page > * {
+  grid-column: 1;
+}
+
+.title-block {
+  padding: 34px 0 0;
+}
+
+/* The title lines up with the top of the margin index, which is what the reader's eye compares. */
+body.has-rail .title-block {
+  padding-top: 56px;
+}
+
+.page-title {
+  margin: 0 0 24px;
+  font-size: clamp(2.4rem, 3.4vw, 3.6rem);
+  font-weight: 500;
+  font-stretch: 90%;
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 96;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  max-width: 22ch;
+}
+
+.standfirst {
+  margin: 0 0 10px;
+  max-width: 34rem;
+  color: var(--ink-2);
+}
+
+/* ─── 7 · the margin index ───────────────────────────────────────────────── */
+
+.rail {
+  display: none;
+}
+
+/* Two lists live in the margin now — the rest of the documentation, and this page's sections — so
+   the rail can be taller than the window. Without this the bottom of the chapter list is
+   unreachable, which is the same hole the list was added to close. */
+.rail {
+  max-height: calc(100vh - var(--running-h) - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rail::-webkit-scrollbar {
+  width: 5px;
+}
+
+.rail::-webkit-scrollbar-thumb {
+  background: var(--rule);
+}
+
+.rail-label {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--ink-3);
+}
+
+.rail-list + .rail-label {
+  margin-top: 22px;
+}
+
+.rail-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail-item a {
+  display: flex;
+  padding: 3px 0 3px 9px;
+  border-left: 1px solid var(--rule);
+  color: var(--ink-2);
+  text-decoration: none;
+  line-height: 1.35;
+}
+
+.rail-item a:hover {
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+.rail-level-3 a {
+  padding-left: 24px;
+  color: var(--ink-3);
+}
+
+.rail-item.is-active a {
+  color: var(--accent);
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+
+.rail-chapters a[aria-current='page'] {
+  color: var(--accent);
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+
+/* The sibling index at the foot of a page. It is the entry point that survives below 1080px, where
+   the margin index is hidden, so it is a plain ruled list rather than anything clever. */
+.more {
+  margin: 54px 0 0;
+  border-top: 2px solid var(--ink);
+  padding-top: 10px;
+}
+
+.more-label {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.more-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: var(--gap-x);
+}
+
+.more-list li {
+  break-inside: avoid;
+  padding: 3px 0;
+}
+
+.more-list a,
+.more-list span {
+  text-decoration: none;
+  color: var(--ink-2);
+}
+
+.more-list a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.more-list span[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ─── 8 · the article ────────────────────────────────────────────────────── */
+
+.prose {
+  padding-bottom: 40px;
+}
+
+.prose > p,
+.prose > ul,
+.prose > ol {
+  max-width: var(--measure);
+}
+
+.prose > p {
+  margin: 0 0 1.05em;
+}
+
+/* The first paragraph is the lede, unless a rule line got there first — which is the case on
+   every page that opens with `::: meta`. */
+body:not(.kind-home) .prose > p:first-child,
+body:not(.kind-home) .prose > .rule-line + p {
+  font-size: 1.08rem;
+  line-height: 1.58;
+  color: var(--ink-2);
+  max-width: 33rem;
+  margin-bottom: 1.5em;
+}
+
+.prose strong {
+  font-weight: 620;
+}
+
+.prose em {
+  font-style: italic;
+  font-variation-settings: 'slnt' 0;
+}
+
+.prose code {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 3px;
+  color: var(--ink);
+  white-space: break-spaces;
+}
+
+.prose a code {
+  text-decoration: inherit;
+}
+
+/* ─── 9 · headings ───────────────────────────────────────────────────────── */
+
+.heading {
+  position: relative;
+  font-weight: 560;
+  font-stretch: 96%;
+  scroll-margin-top: calc(var(--running-h) + 20px);
+}
+
+.heading-anchor {
+  position: absolute;
+  left: -0.85em;
+  top: 0.1em;
+  color: var(--rule-2);
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.heading:hover .heading-anchor,
+.heading-anchor:focus {
+  opacity: 1;
+}
+
+.heading h1,
+h2.heading {
+  margin: 58px 0 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule-2);
+  /* The rule stops where the text does, so the section number at its right end belongs to the
+     heading rather than floating at the edge of a column twice as wide. */
+  max-width: var(--measure);
+  font-size: clamp(1.42rem, 1.8vw, 1.78rem);
+  font-weight: 560;
+  font-stretch: 94%;
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 62;
+  line-height: 1.16;
+  letter-spacing: -0.014em;
+}
+
+h3.heading {
+  margin: 34px 0 10px;
+  font-size: 1.16rem;
+  font-weight: 620;
+  line-height: 1.3;
+  letter-spacing: -0.006em;
+}
+
+h4.heading {
+  margin: 26px 0 8px;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* ─── 10 · lists ─────────────────────────────────────────────────────────── */
+
+.prose .list {
+  margin: 0 0 1.2em;
+  padding: 0;
+  list-style: none;
+}
+
+.prose .list > li {
+  position: relative;
+  padding-left: 24px;
+  margin-bottom: 7px;
+}
+
+.prose ul.list > li::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.68em;
+  width: 7px;
+  height: 1px;
+  background: var(--rule-3);
+}
+
+.prose ol.list {
+  counter-reset: entry;
+}
+
+.prose ol.list > li {
+  counter-increment: entry;
+}
+
+.prose ol.list > li::before {
+  content: counter(entry) '.';
+  position: absolute;
+  left: 0;
+  top: 0.24em;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  color: var(--accent);
+}
+
+.prose .list > li > p {
+  margin: 0 0 0.5em;
+}
+
+/* ─── 11 · tables, set as a specimen sheet sets them ─────────────────────── */
+
+.table-wrap {
+  margin: 26px 0 30px;
+  overflow-x: auto;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  border-top: 2px solid var(--ink);
+  font-size: 0.94rem;
+  line-height: 1.44;
+}
+
+.prose thead th {
+  text-align: left;
+  padding: 8px 20px 7px 0;
+  border-bottom: 1px solid var(--rule-2);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--ink-3);
+  vertical-align: bottom;
+}
+
+.prose tbody td {
+  padding: 8px 20px 8px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.prose tbody td:first-child {
+  color: var(--ink);
+}
+
+/* ─── 12 · samples ───────────────────────────────────────────────────────── */
+
+.code {
+  margin: 26px 0 30px;
+  border: 1px solid var(--rule-2);
+  background: var(--paper-2);
+}
+
+.code-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-3);
+}
+
+.code-name {
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-copy {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.code-copy:hover {
+  color: var(--accent);
+}
+
+.code-copy[data-copied] {
+  color: var(--accent);
+}
+
+.code-body {
+  margin: 0;
+  padding: 12px 14px 14px;
+  overflow-x: auto;
+  font-size: var(--mono-size);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.code-body code {
+  white-space: pre;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.tok-comment {
+  color: var(--c-comment);
+}
+
+.tok-keyword {
+  color: var(--c-keyword);
+}
+
+.tok-string {
+  color: var(--c-string);
+}
+
+.tok-regex {
+  color: var(--c-regex);
+}
+
+.tok-number {
+  color: var(--c-number);
+}
+
+.tok-type {
+  color: var(--c-type);
+}
+
+.tok-property {
+  color: var(--c-property);
+}
+
+.tok-bracket,
+.tok-separator {
+  color: var(--ink-3);
+}
+
+/* A hairline scrollbar, so a sideways-scrolling sample does not arrive with a
+   chrome-coloured bar across the bottom of the sheet. */
+.code-body::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar,
+.live-body ::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.code-body::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb,
+.live-body ::-webkit-scrollbar-thumb {
+  background: var(--rule-2);
+}
+
+/* ─── 13 · a live editor, and the specimen column ────────────────────────── */
+
+.live,
+.specimen {
+  margin: 26px 0 30px;
+  border: 1px solid var(--rule-2);
+  border-top: 2px solid var(--ink);
+  background: var(--paper-2);
+}
+
+/* The bar names the language and holds the controls. It used to say "live" as well, which was a
+   label telling the reader what the box already looks like. */
+.live-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+.live-name {
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Two editors stacked in one well, for the theming page. */
+.live-pair > * + * {
+  margin-top: 10px;
+}
+
+.live-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+
+.live-controls button,
+.live-controls a {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.live-controls button:hover,
+.live-controls a:hover {
+  color: var(--accent);
+}
+
+.live-body {
+  padding: 12px 12px 4px;
+}
+
+.live-foot {
+  margin: 0;
+  padding: 0 12px 10px;
+  color: var(--ink-3);
+  min-height: 1.4em;
+}
+
+.live-foot b {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.live-noscript {
+  display: block;
+  padding: 0 12px 12px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+}
+
+.specimen {
+  margin-top: 52px;
+}
+
+/* ─── 14 · the things to try ─────────────────────────────────────────────── */
+
+.try {
+  margin: 22px 0 30px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--rule-2);
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.try-label {
+  margin: 0 0 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+
+.try .list {
+  margin-bottom: 8px;
+}
+
+.try ul.list > li::before {
+  background: var(--accent);
+}
+
+/* ─── 15 · a note in the margin ──────────────────────────────────────────── */
+
+.note {
+  margin: 22px 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--accent);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.note-label {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+.note p {
+  margin: 0 0 0.5em;
+}
+
+/* ─── 16 · the playground bench ──────────────────────────────────────────── */
+
+.bench {
+  margin: 28px 0 40px;
+  display: grid;
+  gap: 1px;
+  background: var(--rule-2);
+  border: 1px solid var(--rule-2);
+  border-top: 2px solid var(--ink);
+}
+
+.bench-pane {
+  background: var(--paper-2);
+  padding: 10px 12px 12px;
+  min-width: 0;
+}
+
+.bench-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.bench-bar strong {
+  font-weight: 500;
+  color: var(--ink-2);
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.bench-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bench-controls button,
+.bench-controls select {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  background: var(--paper);
+  color: var(--ink-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 2px;
+  padding: 2px 7px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.bench-controls button:hover,
+.bench-controls select:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bench-controls button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+}
+
+.bench-read {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  line-height: 1.5;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.bench-read h4 {
+  margin: 12px 0 4px;
+  font-size: var(--mono-size);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.bench-read h4:first-child {
+  margin-top: 0;
+}
+
+.bench-read ol,
+.bench-read ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bench-read li {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.bench-read .tag {
+  color: var(--ink-3);
+  min-width: 6.4em;
+  flex: none;
+}
+
+.bench-read .value {
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bench-read .severity-error {
+  color: var(--litearea-error);
+}
+
+.bench-read .severity-warning {
+  color: var(--litearea-warning);
+}
+
+.bench-read .severity-info {
+  color: var(--litearea-info);
+}
+
+.bench-read .severity-hint {
+  color: var(--ink-3);
+}
+
+.bench-read .empty {
+  color: var(--ink-3);
+}
+
+.bench-error {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  white-space: pre-wrap;
+}
+
+/* ─── 17 · the ledger of examples ────────────────────────────────────────── */
+
+.ledger {
+  margin: 30px 0 40px;
+  border-top: 2px solid var(--ink);
+}
+
+.ledger-row {
+  display: grid;
+  grid-template-columns: 3.2em minmax(0, 1fr);
+  gap: 6px 18px;
+  align-items: baseline;
+  padding: 13px 0 14px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+}
+
+.ledger-row:hover {
+  background: var(--paper-2);
+  text-decoration: none;
+}
+
+.ledger-row:hover .ledger-title {
+  color: var(--accent);
+}
+
+.ledger-num {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  color: var(--ink-3);
+}
+
+.ledger-title {
+  font-size: 1.18rem;
+  font-weight: 560;
+  font-stretch: 95%;
+  letter-spacing: -0.008em;
+  line-height: 1.2;
+}
+
+.ledger-note {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  max-width: 46rem;
+}
+
+/* ─── 18 · the home page ─────────────────────────────────────────────────── */
+
+/* The front page has no title block: its own `<h1>` is the manifesto, and the rule line under
+   it is the specimen label a printed sheet carries under its title. */
+body.kind-home .prose > h1 {
+  margin: 52px 0 20px;
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  font-weight: 470;
+  font-stretch: 86%;
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 96;
+  line-height: 0.94;
+  letter-spacing: -0.045em;
+  max-width: 17ch;
+}
+
+/* The one code span on the page sits inside the largest type on it, so it is set as a deliberate
+   change of face rather than at the size the rest of the prose uses: mono, vermilion, and small
+   enough that the line still reads as one sentence. */
+body.kind-home .prose > h1 code {
+  font-size: 0.42em;
+  background: none;
+  border: 0;
+  padding: 0 0.05em;
+  color: var(--accent);
+  letter-spacing: 0;
+  vertical-align: 0.12em;
+}
+
+body.kind-home .prose > h1::after {
+  content: '';
+  display: block;
+  width: 1.6em;
+  height: 3px;
+  margin-top: 0.34em;
+  background: var(--accent);
+}
+
+/* The three claims, as a ruled block rather than three cards. */
+.claims {
+  margin: 36px 0 40px;
+  border-top: 2px solid var(--ink);
+}
+
+.claim {
+  display: grid;
+  grid-template-columns: 2.6em minmax(0, 1fr);
+  gap: 0 18px;
+  padding: 16px 0 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.claim-num {
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+  color: var(--accent);
+  padding-top: 0.45em;
+}
+
+.claim-title {
+  margin: 0 0 7px;
+  font-size: 1.28rem;
+  font-weight: 560;
+  font-stretch: 95%;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+}
+
+.claim-text > p {
+  margin: 0 0 0.8em;
+  color: var(--ink-2);
+  max-width: 42rem;
+}
+
+.claim-text > p:last-child {
+  margin-bottom: 0;
+}
+
+.claim-text code {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 3px;
+  color: var(--ink);
+}
+
+/* ─── 19 · the colophon ──────────────────────────────────────────────────── */
+
+.colophon {
+  margin-top: 30px;
+  border-top: 4px solid var(--ink);
+  background: var(--paper);
+}
+
+.colophon-grid {
+  max-width: var(--page-w);
+  margin: 0 auto;
+  padding: 26px var(--pad-x) 20px;
+  display: grid;
+  gap: 26px 40px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.colophon-part p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  max-width: 34em;
+}
+
+.colophon-label {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.colophon-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: var(--mono-size);
+}
+
+.colophon-links a {
+  color: var(--ink-2);
+}
+
+.colophon-part:last-child {
+  padding-bottom: 24px;
+}
+
+/* ─── 20 · the editors, themed from the page's own palette ───────────────── */
+
+body .litearea {
+  --litearea-font: var(--mono);
+  --litearea-font-size: 12px;
+  --litearea-line-height: 20px;
+  --litearea-padding-block: 8px;
+  --litearea-padding-inline: 10px;
+  --litearea-radius: 2px;
+  --litearea-fg: var(--ink);
+  --litearea-fg-dim: var(--ink-3);
+  --litearea-fg-strong: var(--ink);
+  --litearea-bg: var(--paper);
+  --litearea-bg-raised: var(--paper-2);
+  --litearea-border: var(--rule-2);
+  --litearea-border-focus: var(--accent);
+  --litearea-accent: var(--accent);
+  --litearea-accent-soft: var(--accent-soft);
+  --litearea-selection: var(--mark);
+  --litearea-error: #c2370e;
+  --litearea-warning: #9a6b0f;
+  --litearea-info: #2f4a8f;
+  --litearea-hint: var(--ink-3);
+  --litearea-shadow: none;
+
+  --litearea-scope-text: var(--ink);
+  --litearea-scope-word: var(--ink);
+  --litearea-scope-name: var(--ink);
+  --litearea-scope-punctuation: var(--ink-3);
+  --litearea-scope-operator: var(--ink-3);
+  --litearea-scope-separator: var(--ink-3);
+  --litearea-scope-bracket: var(--ink-3);
+  --litearea-scope-comment: var(--c-comment);
+  --litearea-scope-keyword: var(--c-keyword);
+  --litearea-scope-string: var(--c-string);
+  --litearea-scope-region: var(--c-string);
+  --litearea-scope-quote: var(--c-string);
+  --litearea-scope-number: var(--c-number);
+  --litearea-scope-property: var(--c-property);
+  --litearea-scope-field-type: var(--c-type);
+  --litearea-scope-type: var(--c-type);
+  --litearea-scope-pattern: var(--c-regex);
+  --litearea-scope-regex: var(--c-regex);
+  --litearea-scope-form-name: var(--c-keyword);
+  --litearea-scope-option: var(--c-type);
+  --litearea-scope-note: var(--c-string);
+  --litearea-scope-text-region: var(--c-string);
+  --litearea-scope-swatch-color: var(--c-type);
+  --litearea-scope-swatch-shape: var(--c-keyword);
+  --litearea-scope-shape: var(--c-keyword);
+  --litearea-scope-section: var(--c-keyword);
+  --litearea-scope-key: var(--c-type);
+  --litearea-scope-value: var(--c-string);
+  --litearea-scope-boolean: var(--c-keyword);
+  --litearea-scope-invalid: #c2370e;
+}
+
+html[data-mode='ink'] body .litearea {
+  --litearea-error: #ff7a4d;
+  --litearea-warning: #e0b155;
+  --litearea-info: #9fb8ff;
+}
+
+/* The box the editor draws, squared off to match the frame around it. */
+body .litearea-box {
+  border-radius: 2px;
+}
+
+body .litearea-popup {
+  border-radius: 2px;
+  border-color: var(--rule-2);
+  box-shadow: 4px 4px 0 0 var(--rule);
+}
+
+body .litearea-tooltip {
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 0 var(--rule);
+}
+
+body .litearea-stickyRow {
+  box-shadow: 0 5px 6px -4px var(--rule-2);
+}
+
+/* A decoration is a mark, so it gets a mark rather than a background: the same
+   wavy underline the diagnostics use, in ink. */
+body .litearea-dec-base-coat {
+  text-decoration: underline wavy var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* ─── 21 · wide: three columns ───────────────────────────────────────────── */
+
+@media (min-width: 1080px) {
+  body.has-rail {
+    --page-title-row: auto;
+  }
+
+  body.has-rail .page {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+
+  body.has-rail .rail {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--running-h) + 22px);
+    padding-top: 56px;
+  }
+
+  body.has-rail .title-block {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  body.has-rail .prose {
+    grid-column: 2;
+    grid-row: 2;
+    border-left: 1px solid var(--rule);
+    padding-left: var(--prose-pad);
+    padding-bottom: 60px;
+  }
+
+  /* The rule frames the text column on both sides, and the right one is what the
+     margin notes are printed beyond. */
+  body.has-margin .prose {
+    padding-right: calc(var(--margin-w) + var(--gap-x));
+    border-right: 1px solid var(--rule);
+  }
+
+  body.has-margin .note {
+    float: right;
+    clear: right;
+    width: var(--margin-w);
+    margin: 2px calc(-1 * (var(--margin-w) + var(--gap-x))) 20px 0;
+    font-size: 0.78rem;
+  }
+
+  body.has-specimen .page {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr) minmax(320px, 30vw);
+  }
+
+  body.has-specimen .specimen {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--running-h) + 22px);
+    margin-top: 52px;
+  }
+
+  body.has-specimen .prose {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  body.has-specimen .rail {
+    padding-top: 56px;
+  }
+
+  /* The front page has no margin index, so its specimen takes the second column rather than the
+     third and the prose keeps the width a page with no rail gets. */
+  body.no-rail.has-specimen .page {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 32vw);
+  }
+
+  body.no-rail.has-specimen .specimen {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* ─── the bench, side by side ────────────────────────────────────────────── */
+
+@media (min-width: 900px) {
+  .bench {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .bench-pane:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .bench-read {
+    max-height: 460px;
+  }
+}
+
+.bench-error[hidden] {
+  display: none;
+}
+
+/* Below the three-column width the specimen leads, because a live editor that is
+   the point of the page should not be at the bottom of it. */
+@media (max-width: 1079px) {
+  .specimen {
+    margin-top: 34px;
+    order: -1;
+  }
+
+  body.has-specimen .page {
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.has-specimen .title-block {
+    order: -2;
+  }
+
+  body.has-specimen .specimen {
+    order: -1;
+  }
+
+  body.has-specimen .prose {
+    order: 0;
+  }
+}
+
+/* ─── 22 · narrow ────────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  body {
+    font-size: 14pt;
+  }
+
+  .masthead-row {
+    gap: 10px 16px;
+  }
+
+  .index-list {
+    gap: 0 18px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --prose-pad: 0px;
+  }
+
+  .page-title {
+    font-size: 2.1rem;
+  }
+
+  .ledger-row {
+    grid-template-columns: 2.4em minmax(0, 1fr);
+  }
+}
+
+/* ─── 24 · search ────────────────────────────────────────────────────────── */
+
+.search {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: color-mix(in oklab, var(--ink) 34%, transparent);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8vh 16px 16px;
+}
+
+.search[hidden] {
+  display: none;
+}
+
+.search-panel {
+  width: min(680px, 100%);
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--rule-2);
+  border-top: 3px solid var(--ink);
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.search-input:focus {
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--ink-3);
+}
+
+.search-close {
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  cursor: pointer;
+}
+
+.search-close:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.search-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.search-result a {
+  display: block;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+}
+
+.search-result.is-active a,
+.search-result a:hover {
+  background: var(--paper-2);
+}
+
+.search-where {
+  display: block;
+  color: var(--accent);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-sep {
+  color: var(--ink-3);
+}
+
+.search-what {
+  display: block;
+  color: var(--ink-2);
+  line-height: 1.45;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.search-what mark {
+  background: var(--mark);
+  color: var(--ink);
+}
+
+.search-note {
+  margin: 0;
+  padding: 7px 12px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--rule);
+}
+
+body.is-searching {
+  overflow: hidden;
+}
+
+/* ─── 23 · reduced motion, and print ─────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .running {
+    transition: none;
+  }
+}
+
+/* The site is a specimen sheet, so it should survive being printed as one. */
+@media print {
+  :root {
+    --paper: #ffffff;
+    --paper-2: #ffffff;
+    --ink: #000000;
+    --ink-2: #333333;
+    --ink-3: #666666;
+    --rule: rgba(0, 0, 0, 0.2);
+    --rule-2: rgba(0, 0, 0, 0.45);
+    --accent: #000000;
+  }
+
+  body::after,
+  .running,
+  .mode-switch,
+  .search-open,
+  .search,
+  .index,
+  .colophon-links,
+  .skip,
+  .live-controls,
+  .code-copy {
+    display: none !important;
+  }
+
+  body {
+    font-size: 10pt;
+  }
+
+  .masthead-rule {
+    height: 2px;
+  }
+
+  .rail,
+  .specimen {
+    display: none !important;
+  }
+
+  .page {
+    display: block;
+  }
+
+  .heading {
+    break-after: avoid;
+  }
+
+  .code,
+  .live,
+  table {
+    break-inside: avoid;
+  }
+}

@@ -1,0 +1,41 @@
+/*
+ * The two faces, served from this site.
+ *
+ * They are not linked from a font CDN on purpose. A documentation site is read on a train, in
+ * an editor's preview pane, and behind a proxy; a third-party request that fails does not
+ * degrade gracefully, it silently changes the typeface of every page. Both files are the
+ * upstream variable fonts, both are under the SIL Open Font License, and both are subsets
+ * covering Latin plus the typographic punctuation this site actually uses.
+ *
+ * Bricolage Grotesque carries three axes — optical size, width, and weight — and the site uses
+ * all three: a section heading is set at a wider optical size and a narrower width than the
+ * body text, which is what gives the headings their slightly odd, printed voice. Geist Mono is
+ * the code face and appears at exactly one size, 12px, everywhere it appears.
+ *
+ * The two files sit in `public/fonts/`, which is why the urls below are absolute: a public file
+ * is copied to the site root as it stands and its url is rewritten with the deployment's base
+ * path, so the same stylesheet works from `/` in development and from `/litearea/` on Pages.
+ */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+  src: url('/fonts/bricolage-grotesque-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}

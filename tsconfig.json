@@ -37,6 +37,6 @@
       "@citisen/litearea/react": ["./src/react/index.tsx"]
     }
   },
-  "include": ["src", "test", "examples/**/*.ts", "examples/**/*.tsx", "*.ts"],
-  "exclude": ["node_modules", "dist", "examples/demo/dist"]
+  "include": ["src", "test", "examples/**/*.ts", "examples/**/*.tsx", "site/**/*.ts", "*.ts"],
+  "exclude": ["node_modules", "dist", "examples/demo/dist", "site/pages/**/*.html"]
 }
