@@ -280,6 +280,8 @@ and a grammar go in, values come out:
 | `buildStickyBlocks`, `planStickyHeaders`: which blocks nest, and which header has scrolled out of sight | Where a pinned row lands, and whether a `Range` over one line reports a box at all |
 | `applyCompletion`: what a row writes, which the inline preview and the accept read from the same call | Where the inline preview lands, since that is the caret's geometry |
 | `planPairTyping`, `planBracketEnter`, `planCommentToggle`: what a keystroke, an Enter, and a comment toggle should do to the text | Whether the resulting edit is one undoable edit — every one of them is applied through the browser's pipeline, and only a real history can say |
+| `planIndent`: what a level of indentation does to a caret or to a block of lines | The same claim again, and the one it is easiest to get wrong: a five-line indent is one edit, so one Ctrl+Z takes it back |
+| `resolveCommand`, `matchesKey`, `keyCombo`: which command a chord asks for, and whether it matches at all | Whether the keystroke was actually taken from the browser, since a key the editor did not cancel is a key the page still gets |
 
 Everything in the left column has a decision in it, and a decision is what a unit
 test asserts. Everything in the right column is a fact about a renderer. The four

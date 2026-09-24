@@ -282,6 +282,7 @@ const SECTIONS: readonly Section[] = [
       'Type “}” right before an existing “}”: nothing is written, the caret steps over it.',
       'Put the caret between “{” and “}” and press Enter: an indented block opens.',
       'Press Ctrl+/ on a line, then again: the marker goes on and comes back off.',
+      'Select several lines and press Ctrl+] to indent them, Ctrl+[ to take it back — one Ctrl+Z undoes the whole block.',
       'Press Ctrl+Z after any of those: the whole edit goes back as one.',
     ],
     mount: (host) =>
@@ -289,6 +290,17 @@ const SECTIONS: readonly Section[] = [
         grammar: aidsGrammar(),
         value: AIDS_TEXT,
         sizing: { minRows: 6, maxRows: 16 },
+        indent: { unit: 2 },
+        // Tab is deliberately NOT bound here: it is how a reader leaves a form, and an
+        // editor that takes it turns every field into a keyboard trap. `Tab` and
+        // `Shift+Tab` are two lines for a host that wants them:
+        //
+        //     { key: 'Tab', command: 'indent' },
+        //     { key: 'Shift+Tab', command: 'outdent' },
+        keys: [
+          { key: 'Mod+]', command: 'indentLines' },
+          { key: 'Mod+[', command: 'outdentLines' },
+        ],
       }),
   },
 ]

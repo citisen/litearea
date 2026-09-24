@@ -158,8 +158,14 @@ const CHECKLIST = String.raw`
       const tipOf = (editor) => editor.element.querySelector('.litearea-tooltip')
       const rowsOf = (editor) => editor.element.querySelectorAll('.litearea-row')
 
-      const press = (field, key) => {
-        field.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }))
+      // The key name is the one a KeyboardEvent reports — Tab, not Shift+Tab — and
+      // anything held comes in the third argument. Without that, a modifier silently
+      // disappears and the check quietly drives a different chord than it says it does.
+      const press = (field, key, held) => {
+        field.dispatchEvent(new KeyboardEvent('keydown', Object.assign(
+          { key: key, bubbles: true, cancelable: true },
+          held || {},
+        )))
       }
 
       // ── the fixture grammar ─────────────────────────────────────────────
@@ -1116,6 +1122,70 @@ const CHECKLIST = String.raw`
             label + ': the paint must still reproduce the document exactly',
           )
         }
+
+        // ── 16. a block indent is ONE edit, and the browser says so ─────────
+        // The claim that separates a real implementation from a plausible one: indenting
+        // five lines must be ONE undoable edit, not five. Nothing but the browser's own
+        // history can answer it, and an editor that gets it wrong leaves the reader
+        // pressing Ctrl+Z once per line.
+        //
+        // The selection is checked at the same time, because the other half of the same
+        // mistake is collapsing it: a reader who selected three lines to indent them
+        // should not have to select them again to indent them once more.
+        const indenting = mount(editable, 'one\ntwo\nthree', {
+          keys: [
+            { key: 'Tab', command: 'indent' },
+            { key: 'Shift+Tab', command: 'outdent' },
+          ],
+          indent: { unit: '  ' },
+          sizing: { maxRows: 10 },
+        })
+        indenting.focus()
+        indenting.setSelection(0, indenting.input.value.length)
+        press(indenting.input, 'Tab')
+        check(
+          indenting.input.value === '  one\n  two\n  three',
+          'Tab over a selection must indent every line it touches (got ' +
+            JSON.stringify(indenting.input.value) + ')',
+        )
+        check(
+          indenting.input.selectionStart === 0 && indenting.input.selectionEnd === 19,
+          'the indented block must stay selected (got ' + indenting.input.selectionStart +
+            '..' + indenting.input.selectionEnd + ')',
+        )
+        document.execCommand('undo')
+        check(
+          indenting.input.value === 'one\ntwo\nthree',
+          'ONE undo must take back the whole block indent (got ' +
+            JSON.stringify(indenting.input.value) + ')',
+        )
+
+        // And back out again, which is the same edit in the other direction.
+        press(indenting.input, 'Tab')
+        press(indenting.input, 'Tab')
+        check(
+          indenting.input.value === '    one\n    two\n    three',
+          'two more presses must indent to two levels (got ' +
+            JSON.stringify(indenting.input.value) + ')',
+        )
+        press(indenting.input, 'Tab', { shiftKey: true })
+        check(
+          indenting.input.value === '  one\n  two\n  three',
+          'Shift+Tab must take one level back off every line it touches (got ' +
+            JSON.stringify(indenting.input.value) + ')',
+        )
+
+        // The control: with no binding, Tab must stay the browser's key. The editor is
+        // asked whether it cancelled the keystroke, because "the text did not change" is
+        // also what swallowing the key and doing nothing would look like.
+        const unbounded = mount(editable, 'alpha', { sizing: { maxRows: 3 } })
+        unbounded.focus()
+        unbounded.setSelection(0)
+        const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+        check(
+          unbounded.input.dispatchEvent(tab) === true,
+          'an unbound Tab must be left to the browser rather than swallowed',
+        )
 
         // A host's own write at the very end: it must be accepted without throwing,
         // and it is deliberately not a check, because a direct assignment is exactly

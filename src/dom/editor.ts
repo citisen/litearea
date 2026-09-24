@@ -45,6 +45,8 @@ import type { Inspection } from '../core/inspect.js'
 import type { SegmentInput } from '../core/segments.js'
 import type { CompletionTrigger } from '../core/types.js'
 import { applyCompletion, complete } from '../core/complete.js'
+import { planIndent, resolveIndentUnit, type IndentDirection } from '../core/indent.js'
+import { resolveCommand, type KeyBinding } from '../core/keys.js'
 import { planBracketEnter, planCommentToggle, planPairTyping, type PendingEdit } from '../core/pairs.js'
 import { resolveHover } from '../core/hover.js'
 import { inspect } from '../core/inspect.js'
@@ -166,6 +168,54 @@ export interface LiteAreaSticky {
   kinds: readonly string[]
 }
 
+/** What one level of indentation is. */
+export interface LiteAreaIndent {
+  /**
+   * One level: a width in spaces (`2`), or the characters themselves (`'  '`, `'\t'`).
+   * Default two spaces.
+   *
+   * A preference and not a language fact, which is why it is here and not on the
+   * grammar: two hosts may read the same file with different tastes.
+   */
+  unit?: string | number
+}
+
+/**
+ * Everything a key can be bound to.
+ *
+ * A closed set, on purpose. A command name is not a callback: it names something the
+ * editor already does, so a host can move a binding but not invent a behaviour that the
+ * library has no way to keep consistent with its own state.
+ */
+export type LiteAreaCommand =
+  /** Insert a level, or move the selected lines in (contextual). */
+  | 'indent'
+  /** Remove a level (contextual). */
+  | 'outdent'
+  /** Move the caret's own line, or every selected line, in. */
+  | 'indentLines'
+  /** Move it back out. */
+  | 'outdentLines'
+  /** Add or remove the language's comment markers. */
+  | 'toggleComment'
+  /** Open the completion list, or close it when it is already open. */
+  | 'openList'
+  /** Close the list. */
+  | 'closeList'
+  /** Take the active row. */
+  | 'acceptRow'
+  /** Move the active row. */
+  | 'moveRowUp'
+  | 'moveRowDown'
+  | 'moveRowPageUp'
+  | 'moveRowPageDown'
+  /** Close the list, or hide the tooltip when no list is open. */
+  | 'escape'
+  /** Open an indented block between a declared pair. */
+  | 'enterBracket'
+  /** Do nothing, and let the key belong to the browser. */
+  | 'ignore'
+
 /** Everything a host may configure. */
 export interface LiteAreaOptions<State = unknown> {
   /** The language. Nothing else in this library knows anything about syntax. */
@@ -220,11 +270,16 @@ export interface LiteAreaOptions<State = unknown> {
   injectStyles?: boolean
   /** A CSP nonce for the injected stylesheet. */
   styleNonce?: string
+  /** What one level of indentation is, for the indent commands and the block Enter. */
+  indent?: LiteAreaIndent
   /**
-   * How many spaces one level of indentation is, for the block Enter opens between a
-   * declared pair. Default 2. A line already indented with tabs steps with a tab.
+   * Extra key bindings, tried BEFORE the defaults, so a host may move or take away a
+   * key without restating the rest.
+   *
+   * `{ key: 'Tab', command: 'ignore' }` is how a key is given back to the browser: it
+   * matches, it suppresses anything below it, and it performs no action.
    */
-  indentSize?: number
+  keys?: readonly KeyBinding<LiteAreaCommand>[]
   /** Called after a user edit, with the new text. Not called for programmatic writes. */
   onChange?: (value: string) => void
   /** Called when the caret or selection moves. */
@@ -249,6 +304,40 @@ type ResolvedHover = Required<LiteAreaHover>
 
 /** How many rows a Page key moves through. */
 const PAGE_STEP = 8
+
+/**
+ * The keys the editor answers to unless a host says otherwise.
+ *
+ * This says exactly what the if/switch chain it replaced said, and the point of writing
+ * it down is that it can now be read, printed, and overridden. Two keys appear twice,
+ * and that is the mechanism the whole design rests on: a binding whose command does not
+ * apply right now is passed over rather than stopping the search, so `Tab` accepts a
+ * row while the list is open and `Enter` opens a block while it is closed — with no
+ * condition syntax anywhere and no order a reader has to reconstruct.
+ *
+ * The four indent commands are deliberately ABSENT. `Tab` is how a reader leaves a
+ * form, and a library that takes it away turns every field into a keyboard trap. A host
+ * that wants the editor behaviour asks for it, and the README shows the four lines:
+ *
+ *     keys: [
+ *       { key: 'Tab', command: 'indent' },
+ *       { key: 'Shift+Tab', command: 'outdent' },
+ *       { key: 'Mod+[', command: 'outdentLines' },
+ *       { key: 'Mod+]', command: 'indentLines' },
+ *     ]
+ */
+export const DEFAULT_KEYS: readonly KeyBinding<LiteAreaCommand>[] = [
+  { key: 'Enter', command: 'acceptRow' },
+  { key: 'Tab', command: 'acceptRow' },
+  { key: 'ArrowDown', command: 'moveRowDown' },
+  { key: 'ArrowUp', command: 'moveRowUp' },
+  { key: 'PageDown', command: 'moveRowPageDown' },
+  { key: 'PageUp', command: 'moveRowPageUp' },
+  { key: 'Escape', command: 'escape' },
+  { key: 'Mod+Space', command: 'openList' },
+  { key: 'Mod+/', command: 'toggleComment' },
+  { key: 'Enter', command: 'enterBracket' },
+]
 
 /**
  * A code editor over a textarea.
@@ -299,7 +388,10 @@ export class LiteArea<State = unknown> {
   /** The delimiter pairs and comment markers the language declared. */
   private readonly pairs: readonly AutoPair[]
   private readonly comments: CommentSyntax | undefined
-  private readonly indentSize: number
+  /** The characters one level of indentation is, resolved once. */
+  private readonly indentUnit: string
+  /** The keymap: whatever the host added, then the defaults. */
+  private readonly keys: readonly KeyBinding<LiteAreaCommand>[]
   private readonly paintDecorations: boolean
   private readonly handlers: LiteAreaOptions<State>
   private readonly injectedStyle: HTMLStyleElement | undefined
@@ -396,7 +488,8 @@ export class LiteArea<State = unknown> {
     // under a live editor (which `refresh` exists for) gets the new pairs with it.
     this.pairs = this.declaredGrammar.pairs ?? []
     this.comments = this.declaredGrammar.comments
-    this.indentSize = Math.max(0, options.indentSize ?? 2)
+    this.indentUnit = resolveIndentUnit(options.indent?.unit)
+    this.keys = [...(options.keys ?? []), ...DEFAULT_KEYS]
 
     if (options.injectStyles !== false) {
       this.injectedStyle = injectStyles(this.document, options.styleNonce)
@@ -1290,105 +1383,168 @@ export class LiteArea<State = unknown> {
   /**
    * Open a block on Enter between a declared pair.
    *
-   * The default is prevented only when there is an edit to make, so a plain Enter is
-   * still the browser's own newline — and still its own undoable edit.
+   * Only reached when the list is closed, so a plain Enter is still the browser's own
+   * newline — and still its own undoable edit.
    *
-   * @param event - the keydown, cancelled when a block is opened.
-   * @returns whether the key was handled.
+   * @returns whether a block was opened.
    */
-  private enterBracket(event: KeyboardEvent): boolean {
+  private enterBracket(): boolean {
     if (this.pairs.length === 0) return false
     const edit = planBracketEnter({
       text: this.input.value,
       caret: this.caret(),
       pairs: this.pairs,
-      indentSize: this.indentSize,
+      unit: this.indentUnit,
     })
     if (edit === undefined) return false
-    event.preventDefault()
     this.applyEdit(edit)
     return true
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    // First, because a keystroke a row asked for is a pick and not text.
+    // First, because a keystroke a row asked for is a pick and not text — and because
+    // the characters a row names are that row's own data rather than a binding.
     if (this.commitCharacter(event)) return
 
-    if (event.key === 'Escape') {
-      if (this.popup.isOpen) {
-        event.preventDefault()
-        this.closeCompletion()
-        return
-      }
-      this.hideTooltip()
-      return
-    }
+    const command = resolveCommand(this.keys, event, (candidate) => this.commandApplies(candidate))
+    // Nothing matched, or a host gave the key back: it belongs to the browser.
+    if (command === undefined || command === 'ignore') return
+    // Only a command that DID something takes the key away from the browser, which is
+    // what keeps Escape closing a tooltip instead of swallowing the keystroke.
+    if (this.runCommand(command)) event.preventDefault()
+  }
 
-    // The comment toggle is refused while the list is open, because `Ctrl+/` is a
-    // separator in most languages and a list that is open over the line the reader is
-    // commenting out would be filtering on text that is about to change under it.
-    if (event.key === '/' && (event.ctrlKey || event.metaKey) && !event.altKey) {
-      if (this.comments !== undefined && !this.popup.isOpen) {
-        const edit = planCommentToggle({
-          text: this.input.value,
-          from: this.input.selectionStart,
-          to: this.input.selectionEnd,
-          syntax: this.comments,
-        })
-        if (edit !== undefined) {
-          event.preventDefault()
-          this.applyEdit(edit)
-          return
-        }
-      }
-      return
+  /**
+   * Whether a command means anything right now.
+   *
+   * This is the whole of what a `when` expression would have been. It lives here rather
+   * than in the host's config for the reason a config is worth reading at all: the
+   * editor knows which of its own states a command needs, and a host should not have to
+   * restate them. It is also what lets one key carry two bindings — `Tab` accepts while
+   * the list is open and indents while it is closed.
+   *
+   * @param command - the command a matched binding asks for.
+   * @returns whether it should run.
+   */
+  private commandApplies(command: LiteAreaCommand): boolean {
+    switch (command) {
+      case 'ignore':
+      case 'escape':
+        return true
+      case 'openList':
+        return this.completion !== undefined
+      case 'closeList':
+        return this.popup.isOpen
+      case 'acceptRow':
+      case 'moveRowUp':
+      case 'moveRowDown':
+      case 'moveRowPageUp':
+      case 'moveRowPageDown':
+        return this.popup.isOpen
+      // The list owns these while it is open: it is filtering on the text they would
+      // change. `Ctrl+/` is a separator in most languages, which is a keystroke a reader
+      // may well be spending on the list itself.
+      case 'toggleComment':
+      case 'enterBracket':
+      case 'indent':
+      case 'outdent':
+      case 'indentLines':
+      case 'outdentLines':
+        return !this.popup.isOpen
     }
+  }
 
-    if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault()
-      if (this.popup.isOpen) this.closeCompletion()
-      else this.openCompletion('explicit')
-      return
-    }
-
-    if (!this.popup.isOpen) {
-      // Enter between a declared pair opens a block rather than a line. Only with the
-      // list closed: with it open, Enter is a pick, and a pick beats a bracket.
-      if (event.key === 'Enter' && !event.shiftKey && !this.composing) this.enterBracket(event)
-      return
-    }
+  /**
+   * Run a command.
+   *
+   * @param command - what to do.
+   * @returns whether it did anything, which decides whether the keystroke is cancelled.
+   */
+  private runCommand(command: LiteAreaCommand): boolean {
     const last = this.popup.items.length - 1
-
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault()
-        // No wrapping, because a list that jumps from the end back to the start on
-        // one arrow press is a list nobody can navigate deliberately.
+    switch (command) {
+      case 'acceptRow':
+        this.acceptCompletion(this.popup.activeIndex)
+        return true
+      case 'moveRowDown':
+        // No wrapping, because a list that jumps from the end back to the start on one
+        // arrow press is a list nobody can navigate deliberately.
         this.setActive(Math.min(this.popup.activeIndex + 1, last))
-        return
-      case 'ArrowUp':
-        event.preventDefault()
+        return true
+      case 'moveRowUp':
         this.setActive(Math.max(this.popup.activeIndex - 1, 0))
-        return
-      case 'PageDown':
-        event.preventDefault()
+        return true
+      case 'moveRowPageDown':
         this.setActive(Math.min(this.popup.activeIndex + PAGE_STEP, last))
-        return
-      case 'PageUp':
-        event.preventDefault()
+        return true
+      case 'moveRowPageUp':
         this.setActive(Math.max(this.popup.activeIndex - PAGE_STEP, 0))
-        return
-      case 'Enter':
-        event.preventDefault()
-        this.acceptCompletion(this.popup.activeIndex)
-        return
-      case 'Tab':
-        event.preventDefault()
-        this.acceptCompletion(this.popup.activeIndex)
-        return
-      default:
-        return
+        return true
+      case 'openList':
+        if (this.popup.isOpen) this.closeCompletion()
+        else this.openCompletion('explicit')
+        return true
+      case 'closeList':
+        this.closeCompletion()
+        return true
+      case 'escape':
+        if (this.popup.isOpen) {
+          this.closeCompletion()
+          return true
+        }
+        this.hideTooltip()
+        return false
+      case 'ignore':
+        return false
+      case 'toggleComment':
+        return this.toggleComment()
+      case 'enterBracket':
+        // While an IME is composing, the Enter belongs to the IME.
+        return this.composing ? false : this.enterBracket()
+      case 'indent':
+        return this.applyIndent('in', false)
+      case 'outdent':
+        return this.applyIndent('out', false)
+      case 'indentLines':
+        return this.applyIndent('in', true)
+      case 'outdentLines':
+        return this.applyIndent('out', true)
     }
+  }
+
+  /** Add or remove the language's comment markers around the selection. */
+  private toggleComment(): boolean {
+    if (this.comments === undefined) return false
+    const edit = planCommentToggle({
+      text: this.input.value,
+      from: this.input.selectionStart,
+      to: this.input.selectionEnd,
+      syntax: this.comments,
+    })
+    if (edit === undefined) return false
+    this.applyEdit(edit)
+    return true
+  }
+
+  /**
+   * Move the selection, or the lines it covers, by one level of indentation.
+   *
+   * @param direction - in or out.
+   * @param lines - whether whole lines always move, whatever the selection is.
+   * @returns whether anything changed.
+   */
+  private applyIndent(direction: IndentDirection, lines: boolean): boolean {
+    const edit = planIndent({
+      text: this.input.value,
+      from: this.input.selectionStart,
+      to: this.input.selectionEnd,
+      unit: this.indentUnit,
+      direction,
+      lines,
+    })
+    if (edit === undefined) return false
+    this.applyEdit(edit)
+    return true
   }
 
   /**

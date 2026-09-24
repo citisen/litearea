@@ -4,12 +4,15 @@
 // framework. Everything here needs a document.
 
 export {
+  DEFAULT_KEYS,
   LiteArea,
   type EditorDecoration,
   type EditorRange,
   type EditorSeverity,
+  type LiteAreaCommand,
   type LiteAreaCompletion,
   type LiteAreaHover,
+  type LiteAreaIndent,
   type LiteAreaOptions,
   type LiteAreaSizing,
   type LiteAreaSticky,

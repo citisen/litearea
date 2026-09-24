@@ -117,7 +117,7 @@ describe('planBracketEnter', () => {
   })
 
   it('takes the step from the option', () => {
-    const edit = planBracketEnter({ text: '{}', caret: 1, pairs, indentSize: 4 })
+    const edit = planBracketEnter({ text: '{}', caret: 1, pairs, unit: '    ' })
     if (edit === undefined) throw new Error('expected an edit')
     expect(applied('{}', edit)).toBe('{\n    \n}')
   })

@@ -505,6 +505,62 @@ Three things worth knowing:
   that a paren inside a comment is prose and a paren inside an expression is a bracket.
   `indentSize` is a preference, so it lives on `createEditor`.
 
+## Indentation and key bindings
+
+`indent.unit` is what one level of indentation is — a width in spaces, or the characters
+themselves. It is used by the indent commands and by the block that Enter opens between
+a declared pair. It is an editor option rather than a grammar field because it is a
+taste and not a fact about the language.
+
+Four commands move text by a level:
+
+| Command | Caret | Selection |
+| --- | --- | --- |
+| `indent` / `outdent` | A unit is typed at the caret; outdent removes up to one level around it | Every line the selection touches moves by one level |
+| `indentLines` / `outdentLines` | The caret's own line moves | Same |
+
+A block indent is **one edit**: one Ctrl+Z takes back all five lines, and the selection
+stays on the same lines (including the indentation just added) so a second press
+deepens it. Outdenting a line that is already at the margin changes nothing, and a
+command that changed nothing does not swallow the key.
+
+The keys are a table. `DEFAULT_KEYS` is exported and says exactly what the editor
+answers to; a host's `keys` are tried **before** it, so a binding can be moved, added,
+or taken away without restating the rest:
+
+```ts
+createEditor(target, {
+  grammar,
+  indent: { unit: '\t' },          // or 4, or '    '
+  keys: [
+    // VSCode's behaviour. Not the default: Tab is how a reader leaves a form, and a
+    // library that takes it away turns every field into a keyboard trap.
+    { key: 'Tab', command: 'indent' },
+    { key: 'Shift+Tab', command: 'outdent' },
+    { key: 'Mod+]', command: 'indentLines' },
+    { key: 'Mod+[', command: 'outdentLines' },
+    // Give a default key back to the browser.
+    { key: 'Escape', command: 'ignore' },
+  ],
+})
+```
+
+Two things about that table are worth knowing, because they are what keeps it small:
+
+- **There is no `when` expression.** A binding whose command does not apply right now is
+  simply passed over, and that is decided by the editor rather than by the host:
+  `acceptRow` applies while the list is open, `indent` while it is closed. One key can
+  therefore carry two bindings — which is how `Tab` accepts a row with the list open and
+  would indent with it closed — and no condition syntax is needed to say so.
+- **`ignore` is how a key is handed back.** It matches, it suppresses anything below it,
+  and it performs nothing, so the browser's own handling happens as if the editor had
+  never seen the key. It is also the honest answer for a command with nothing to do: an
+  outdent at the margin does not consume the keystroke either.
+
+`Command` is a closed set — the commands the editor already performs. A binding names
+one of them; it is not a callback, because a host's callback could not be kept consistent
+with state the editor owns.
+
 ## Keyboard
 
 Everything the editor intercepts, and what it deliberately leaves alone:
@@ -513,13 +569,18 @@ Everything the editor intercepts, and what it deliberately leaves alone:
 | --- | --- |
 | `ArrowDown` / `ArrowUp` | Move the active row by one. It stops at the ends instead of wrapping |
 | `PageDown` / `PageUp` | Move the active row by eight |
-| `Enter` | Accept the active row |
-| `Tab` | Accept the active row |
+| `Enter` | Accept the active row; with no list open, open an indented block between a declared pair |
+| `Tab` | Accept the active row. **Not** indent — see above |
 | `Escape` | Close the list; with no list open, hide the tooltip |
 | `Ctrl+Space` / `Cmd+Space` | Open the list, or close it when it is already open |
+| `Ctrl+/` / `Cmd+/` | Toggle the language's comment markers |
 | a row's `commitCharacters` | Accept the active row and write the character after it, so the keystroke is not swallowed. The list then closes |
 | `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y` | **Not intercepted.** These are the browser's own undo and redo on the field, which is the whole point of being uncontrolled |
 | `Shift+Arrow`, `Home`, `End` | Not intercepted. They move the caret without an `input` event, so the editor just closes a list the caret has walked out of |
+
+`defaultKeys` — the value, not a copy — is what that table describes, and
+`keyCombo(event)` writes a press the way a binding spells it, which is what a host needs
+to log or prompt for a chord.
 
 ## Theming
 

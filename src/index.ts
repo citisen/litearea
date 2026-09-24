@@ -132,6 +132,22 @@ export {
   type PendingEdit,
 } from './core/pairs.js'
 
+export {
+  planIndent,
+  resolveIndentUnit,
+  type IndentCommand,
+  type IndentDirection,
+  type IndentRequest,
+} from './core/indent.js'
+
+export {
+  keyCombo,
+  matchesKey,
+  resolveCommand,
+  type KeyBinding,
+  type KeyPress,
+} from './core/keys.js'
+
 export { defineCompletion, defineGrammar } from './core/grammar.js'
 
 export {

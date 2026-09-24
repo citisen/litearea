@@ -21,7 +21,7 @@
 // a browser makes awkward to stage: a caret inside a string, a selection that is already
 // commented, an opener typed in front of a word.
 
-import { clamp, isWordChar, lineIndexAt, lineStarts } from './text.js'
+import { clamp, isWordChar, lineAt, lineIndexAt, lineStarts } from './text.js'
 import type { AutoPair, CommentSyntax, Scope } from './types.js'
 
 /**
@@ -145,8 +145,13 @@ export interface BracketEnter {
   caret: number
   /** The declared pairs. */
   pairs: readonly AutoPair[]
-  /** How many spaces one level of indentation is. Default 2. */
-  indentSize?: number
+  /**
+   * The characters one level of indentation is.
+   *
+   * The same unit the indent commands use, resolved once by the caller — one option
+   * describing indentation, not two that can disagree.
+   */
+  unit?: string
 }
 
 /**
@@ -154,8 +159,8 @@ export interface BracketEnter {
  *
  * Between `{}` on one line, Enter is not a line break — it is the start of a block, and
  * what it should produce is three lines with the caret on the indented middle one. The
- * step is a tab when the line is already indented with tabs and spaces otherwise, so a
- * document indented one way does not acquire the other.
+ * step is a tab when the line is already indented with tabs and the configured unit
+ * otherwise, so a document indented one way does not acquire the other.
  *
  * @param input - the document, the caret, and the declaration.
  * @returns the edit, or `undefined` when the caret is not between a declared pair.
@@ -172,7 +177,7 @@ export function planBracketEnter(input: BracketEnter): PendingEdit | undefined {
   const starts = lineStarts(text)
   const line = lineIndexAt(starts, caret)
   const indent = leadingWhitespace(text.slice(starts[line] ?? 0, caret))
-  const step = indent.includes('\t') ? '\t' : ' '.repeat(Math.max(0, input.indentSize ?? 2))
+  const step = indent.includes('\t') ? '\t' : (input.unit ?? '  ')
   const inner = indent + step
   const written = `\n${inner}\n${indent}`
   const caretInNew = caret + 1 + inner.length
@@ -235,9 +240,8 @@ function leadingWhitespace(line: string): string {
 /**
  * The bounds of one line, terminator excluded.
  *
- * A `\r\n` terminator belongs to the line it ends and to neither line's text, which
- * matters here more than anywhere else: a comment marker inserted after a stray `\r`
- * would end up on the wrong side of it, and the toggle would not be symmetric.
+ * Kept as a named function because the callers here think in LINE NUMBERS, and `lineAt`
+ * thinks in offsets.
  *
  * @param text - the document.
  * @param starts - the result of {@link lineStarts}.
@@ -249,11 +253,8 @@ function lineBounds(
   starts: readonly number[],
   line: number,
 ): { from: number; to: number } {
-  const from = starts[line] ?? text.length
-  const next = starts[line + 1]
-  let to = next === undefined ? text.length : Math.max(from, next - 1)
-  if (to > from && text.charAt(to - 1) === '\r') to -= 1
-  return { from, to }
+  const info = lineAt(text, starts[line] ?? text.length, starts)
+  return { from: info.from, to: info.to }
 }
 
 /** Add one line's comment marker after its indentation. */
