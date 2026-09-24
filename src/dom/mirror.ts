@@ -248,6 +248,14 @@ export class TextMirror {
    * is. At the end of the document there is no next character, so a zero-width
    * space stands in for it.
    *
+   * The box returned is the caret's LINE box, not the marker's own box, and the
+   * difference is not academic. A bounding rect on an inline element reports the font's
+   * CONTENT area — about 15px for 13px monospace — while the line it sits in is the line
+   * height, 20px, with the leading split above and below. A caller drawing one line of
+   * text against another needs the line box: given the content box it lands a couple of
+   * pixels low, which is invisible under a popup placed below the caret and plainly
+   * visible in a chip of text that has to line up with the text beside it.
+   *
    * The field's own scroll offset is subtracted, because the caret's position on
    * screen is what the popup has to be placed against, and a scrolled field moves
    * its text without moving its border box.
@@ -281,10 +289,12 @@ export class TextMirror {
     const mirrorRect = this.element.getBoundingClientRect()
     const markerRect = marker.getBoundingClientRect()
     const lineHeight = this.lineHeight(field)
+    const glyphs = markerRect.height > 0 ? markerRect.height : lineHeight
+    const lead = Math.max(0, lineHeight - glyphs) / 2
     return {
       x: markerRect.left - mirrorRect.left - field.scrollLeft,
-      y: markerRect.top - mirrorRect.top - field.scrollTop,
-      height: markerRect.height > 0 ? markerRect.height : lineHeight,
+      y: markerRect.top - mirrorRect.top - field.scrollTop - lead,
+      height: lineHeight,
       lineHeight,
     }
   }

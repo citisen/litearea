@@ -467,8 +467,9 @@ rather than a preference: the mirror predicts where the *field* will put the car
 field and the paint are about a pixel apart — invisible under a popup placed below the
 caret, and plainly visible in a chip of text that has to continue the painted word. The
 chip is also given the painted line's full height, so it covers a line rather than the
-font's content box. The one case the paint cannot answer is a line with nothing painted on
-it, and there the mirror's prediction is used.
+font's content box, and its glyphs are aligned by half the leading. The one case the paint
+cannot answer is a line with nothing painted on it; there the mirror's prediction is used,
+and it reports the line box too, so the two paths agree about where a line is.
 
 ## Typing aids
 

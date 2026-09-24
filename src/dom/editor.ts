@@ -1142,16 +1142,19 @@ export class LiteArea<State = unknown> {
       return
     }
 
+    // The paint could not answer — the caret is on a line with nothing painted on it —
+    // so the mirror does. Its box is the line box too, which is what keeps this path and
+    // the painted one telling the same story about where a line is.
+    const field = this.input.getBoundingClientRect()
     const box = this.mirror.caretBox(this.input, caret)
     if (box === undefined) {
       ghost.hide()
       return
     }
-    const field = this.input.getBoundingClientRect()
     ghost.show(suffix, {
       x: field.left + box.x - origin.left,
       y: field.top + box.y - origin.top,
-      height: lineHeight,
+      height: box.height,
     })
   }
 

@@ -167,13 +167,13 @@ together, because both come from reading the wrong rectangle rather than from
 wrapping or fonts:
 
 - An inline box's `getBoundingClientRect` reports the font's CONTENT area, not the LINE
-  box it sits in — about 15px against 20px, with the leading split above and below. The
-  caret's box is reported honestly as what it is, and a caller placing one line of text
-  against another corrects by half the leading (`mirror.caretBox` returns the line box
-  for the height, and the callers that draw text apply the correction). A popup below the
-  caret does not care; a chip of text that has to line up with the text beside it cares
-  very much, and comparing the two kinds of rect in a test is how a pixel of error goes
-  unnoticed.
+  box it sits in — about 15px against 20px, with the leading split above and below. Both
+  places that report a caret's box therefore return the line box, correcting by half the
+  leading: `mirror.caretBox` (whose documented contract said line box and whose
+  implementation said content box, which is how the inline preview ended up two pixels low
+  on an empty line) and `PaintReader.lineBox`. A popup below the caret does not care; a
+  chip of text that has to line up with the text beside it cares very much, and comparing
+  the two kinds of rect in a test is how a pixel of error goes unnoticed.
 - Absolutely positioned children are offset from their containing block's **padding
   box**, not its border box, and the box has a one pixel border. The sticky rows and the
   inline preview are both children of it, so both were a pixel low until

@@ -1212,6 +1212,60 @@ const CHECKLIST = String.raw`
           'an unbound Tab must be left to the browser rather than swallowed',
         )
 
+        // ── 13b. the preview on a line with nothing painted ────────────────
+        // The one case the paint cannot measure: an empty line has no glyphs, so the
+        // mirror's prediction is used instead — and it has to agree with the paint about
+        // where a line IS. Both must correct the font's content box by half the leading,
+        // or the chip lands a couple of pixels low, which is exactly what a reader
+        // notices and what a check comparing two different kinds of rectangle misses.
+        //
+        // The reference is the line below it: an empty line is one line tall, so its text
+        // belongs exactly one line height above the text under it.
+        const emptyLine = mount(fixture, 'draw cir\n\nfill', {
+          completion: { inline: true },
+          sizing: { maxRows: 6 },
+        })
+        emptyLine.focus()
+        emptyLine.setSelection(9)
+        press(emptyLine.input, ' ', { ctrlKey: true })
+        const emptyGhost = emptyLine.element.querySelector('.litearea-ghost')
+        check(
+          emptyGhost !== null && emptyGhost.dataset.open === 'true',
+          'a preview must appear on an empty line too',
+        )
+        if (emptyGhost !== null) {
+          const emptyPaint = paintOf(emptyLine)
+          const walker = document.createTreeWalker(emptyPaint, 4)
+          let offset = 0
+          let node = walker.nextNode()
+          let third = null
+          while (node !== null) {
+            const length = (node.textContent || '').length
+            if (offset + length > 10 && offset <= 14) {
+              third = { node: node, start: 10 - offset, end: 14 - offset }
+              break
+            }
+            offset += length
+            node = walker.nextNode()
+          }
+          check(third !== null, 'the fixture must paint the line below the empty one')
+          if (third !== null) {
+            const range = document.createRange()
+            range.setStart(third.node, Math.max(0, third.start))
+            range.setEnd(third.node, Math.min(third.end, (third.node.textContent || '').length))
+            const belowBox = range.getBoundingClientRect()
+            const ghostRange = document.createRange()
+            ghostRange.selectNodeContents(emptyGhost)
+            const ghostBox2 = ghostRange.getBoundingClientRect()
+            const lineHeight = Number.parseFloat(getComputedStyle(emptyPaint).lineHeight)
+            check(
+              Math.abs(ghostBox2.top - (belowBox.top - lineHeight)) <= 0.5,
+              'a preview on an empty line must sit one line above the text below it (' +
+                'preview ' + ghostBox2.top + ', wanted ' + (belowBox.top - lineHeight) + ')',
+            )
+          }
+        }
+
         // A host's own write at the very end: it must be accepted without throwing,
         // and it is deliberately not a check, because a direct assignment is exactly
         // what the control above proved the pipeline does not record.
