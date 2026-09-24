@@ -143,6 +143,25 @@ scrolled by copying the field's `scrollTop`/`scrollLeft` rather than by a
 transform, which is more reliable than a transform that can leave text on a half
 pixel.
 
+**A document ending in a newline has one more line than the paint.** A textarea
+lays out the empty line after that newline — it is a line the reader can put the
+caret on — and a `pre-wrap` div does not, because the newline breaks the line and
+nothing follows it. `min-height: 100%` covers only the case where the content fits
+inside the box; when the content overflows, which is exactly when there is a
+scrollbar, the field scrolls one line further than the text and the caret appears to
+walk away from the word under it. So the paint earns that line with a trailing
+`<br>`: an element, not a character, which is what keeps `paint.textContent ===
+field.value` true while the last line box exists. The scrollbar case has a second
+half of the same kind — a field with a scrollbar of its own wraps in a narrower
+space, and it is measured and published in the resizable mode too, because a width
+this editor did not cause is still a width the paint has to wrap inside.
+
+Both are asserted in `scripts/browser-check.mjs` by scrolling three editors to the
+bottom — one document ending in a newline, one not, and one whose field owns its own
+scrollbar — and comparing the offsets, the scrollable heights, and the wrapping
+widths. Neither is visible to a unit test: `happy-dom` lays nothing out, which is
+how the library shipped both for as long as it did.
+
 ## The mirror
 
 Two measurements are needed and the field cannot supply either:
@@ -257,7 +276,10 @@ and a grammar go in, values come out:
 | `rank`, `fuzzyMatch`, `highlightSegments` | Whether the layer and the field really line up |
 | `buildSegments`: the merge order | Whether the box has a scrollbar |
 | `resolveHover` and the precedence | Anything about font metrics, wrapping, or scrollbar widths |
-| `defineVocabulary`, `lineStarts`, `wordInfoAt`, `tokenAt` | |
+| `defineVocabulary`, `lineStarts`, `wordInfoAt`, `tokenAt`, `lineIndexAt` | |
+| `buildStickyBlocks`, `planStickyHeaders`: which blocks nest, and which header has scrolled out of sight | Where a pinned row lands, and whether a `Range` over one line reports a box at all |
+| `applyCompletion`: what a row writes, which the inline preview and the accept read from the same call | Where the inline preview lands, since that is the caret's geometry |
+| `planPairTyping`, `planBracketEnter`, `planCommentToggle`: what a keystroke, an Enter, and a comment toggle should do to the text | Whether the resulting edit is one undoable edit — every one of them is applied through the browser's pipeline, and only a real history can say |
 
 Everything in the left column has a decision in it, and a decision is what a unit
 test asserts. Everything in the right column is a fact about a renderer. The four
@@ -303,8 +325,8 @@ skip into a failure for the environments that must not skip.
 The DOM layer itself is deliberately thin: `LiteArea` is the only class that holds
 state, and every other module in `src/dom/` is one job — `editing` the
 undo-preserving write, `mirror` the measurement, `overlay` the paint, `popup` the
-list, `tooltip` the hover, `support` the one place that asks the environment a
-question. `createEditor(target, options)` is the class plus "append it and measure
+list, `tooltip` the hover, `sticky` the pinned header rows, `support` the one place
+that asks the environment a question. `createEditor(target, options)` is the class plus "append it and measure
 again", which is all most hosts need.
 
 ## What was rejected

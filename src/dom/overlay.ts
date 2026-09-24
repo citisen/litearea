@@ -46,6 +46,17 @@ export class Overlay {
   }
 
   /**
+   * The element the spans are written into.
+   *
+   * Exposed because the paint is the only element that has already laid the document
+   * out exactly as the field did, so it is the one place a line's box can be measured
+   * from — which is what the sticky rows need.
+   */
+  get paintElement(): HTMLDivElement {
+    return this.paint
+  }
+
+  /**
    * Paint a document.
    *
    * `key` is whatever the caller knows changed. When it and the text both match
@@ -73,6 +84,20 @@ export class Overlay {
       fragment.appendChild(span)
     }
     this.paint.replaceChildren(fragment)
+    // A document that ends in a newline has a LAST LINE that is empty, and a textarea
+    // lays it out: that is a line the reader can put the caret on, and it is part of
+    // the field's scrollable height. A div with `white-space: pre-wrap` does not lay it
+    // out — the newline breaks the line and nothing follows it — so `min-height: 100%`
+    // covers only the case where the content fits the box. When it does not fit, which
+    // is exactly when there is a scrollbar, the field scrolls one line further than the
+    // paint and the caret walks away from the text under it.
+    //
+    // A `<br>` gives that line a box and contributes NO characters, so the layer still
+    // reproduces the document exactly — which is why this is an element and not a
+    // zero-width space in the text.
+    if (text.endsWith('\n') || text.endsWith('\r')) {
+      this.paint.appendChild(this.document.createElement('br'))
+    }
     this.paintedText = text
     this.paintedKey = key
   }

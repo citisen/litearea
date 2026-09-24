@@ -741,6 +741,382 @@ const CHECKLIST = String.raw`
             document.querySelectorAll('style[data-litearea-styles]').length + ')',
         )
 
+        // ── 12. the pinned header sits on the line it replaces ─────────────
+        // A pinned row is a copy of a line, placed from a measurement of that line, and
+        // every part of that sentence is layout: whether the line box was found at all,
+        // whether the row landed on the box's top edge rather than a line above or
+        // below it, and whether the row that stays pinned is the one whose block the
+        // reader is inside. None of it can be staged without a renderer.
+        //
+        // The language is a second fixture, because the first one has no blocks: a
+        // document of groups and items, where a group runs until the next group. A
+        // host would write this in the grammar's decorate hook; it is written out here
+        // in plain offsets so the check reads as the shape of a document and not as a
+        // parser.
+        const grouped = api.defineGrammar({
+          id: 'sticky-fixture',
+          rules: [
+            { kind: 'match', scope: 'keyword', pattern: /group/ },
+            { kind: 'match', scope: 'name', pattern: /[a-z]+/ },
+          ],
+          decorate: (text) => {
+            const starts = [0]
+            for (let at = 0; at < text.length; at += 1) {
+              if (text.charCodeAt(at) === 10) starts.push(at + 1)
+            }
+            const headers = []
+            for (let line = 0; line < starts.length; line += 1) {
+              if (text.slice(starts[line], starts[line] + 5) === 'group') headers.push(line)
+            }
+            // A group runs from its own header line to the character before the next
+            // group's header, and the last one runs to the end of the document.
+            return headers.map((line, index) => {
+              const next = headers[index + 1]
+              const end = next === undefined ? text.length : starts[next] - 1
+              return { kind: 'group', from: starts[line], to: end }
+            })
+          },
+        })
+
+        const stickyLines = ['group alpha']
+        for (let item = 1; item <= 8; item += 1) stickyLines.push('  item ' + item)
+        stickyLines.push('group beta')
+        for (let item = 1; item <= 10; item += 1) stickyLines.push('  item ' + item)
+        const stickyText = stickyLines.join('\n')
+
+        // The control first: without the option there must be no strip at all, or a strip
+        // that appeared for some other reason would make the checks below pass.
+        const unpinned = mount(grouped, stickyText, { sizing: { maxRows: 3 } })
+        check(
+          unpinned.element.querySelectorAll('.litearea-stickyRow').length === 0,
+          'an editor that declared no blocks must pin nothing',
+        )
+
+        const pinnedEditor = mount(grouped, stickyText, {
+          sticky: { kinds: ['group'] },
+          sizing: { maxRows: 3 },
+        })
+        const scrollTo = (editor, offset) => {
+          editor.input.scrollTop = offset
+          editor.input.dispatchEvent(new Event('scroll'))
+        }
+
+        scrollTo(pinnedEditor, 60)
+        const firstPinned = pinnedEditor.element.querySelectorAll('.litearea-stickyRow')
+        check(
+          firstPinned.length === 1,
+          'scrolling inside a block must pin exactly its own header (got ' + firstPinned.length + ')',
+        )
+        if (firstPinned.length > 0) {
+          const row = firstPinned[0]
+          const box = pinnedEditor.element.querySelector('.litearea-box').getBoundingClientRect()
+          const at = row.getBoundingClientRect()
+          check(
+            row.textContent.indexOf('group alpha') >= 0,
+            'the pinned row must be the header of the block under the reader (got ' +
+              JSON.stringify(row.textContent) + ')',
+          )
+          check(
+            row.textContent.indexOf('\n') < 0,
+            'a pinned row must be one line, not a copy of the block (got ' +
+              JSON.stringify(row.textContent) + ')',
+          )
+          check(
+            Math.abs(at.top - box.top) <= 2,
+            'the pinned row must sit on the top edge of the box (row ' + at.top + ', box ' + box.top + ')',
+          )
+          check(
+            Math.abs(at.height - 20) <= 6,
+            'a pinned row must be one line tall (got ' + at.height + ')',
+          )
+          check(
+            at.bottom <= pinnedEditor.input.getBoundingClientRect().bottom,
+            'a pinned row must stay inside the box',
+          )
+        }
+
+        // At the bottom of the document the first group is behind the reader and the
+        // second one is not, so the row that stays pinned has to be the second header.
+        scrollTo(pinnedEditor, 100000)
+        const lastPinned = pinnedEditor.element.querySelectorAll('.litearea-stickyRow')
+        check(
+          lastPinned.length === 1,
+          'a block that has scrolled past must unpin (got ' + lastPinned.length + ' rows)',
+        )
+        if (lastPinned.length > 0) {
+          check(
+            lastPinned[0].textContent.indexOf('group beta') >= 0,
+            'the pinned row must follow the reader into the next block (got ' +
+              JSON.stringify(lastPinned[0].textContent) + ')',
+          )
+        }
+
+        // A header still on screen is not pinned, because there is nothing to replace.
+        scrollTo(pinnedEditor, 0)
+        check(
+          pinnedEditor.element.querySelectorAll('.litearea-stickyRow').length === 0,
+          'a header that is visible must not be copied into the strip',
+        )
+
+        // ── 13. the inline preview grows out of the caret ──────────────────
+        // The preview stands where the next character would land, which is a claim about
+        // the caret's geometry and the painter's — and the other half of the claim is
+        // that it changes NEITHER: the layer must still reproduce the document exactly
+        // while a preview of an edit sits on top of it.
+        const previewed = mount(fixture, 'draw cir', {
+          completion: { inline: true },
+          sizing: { maxRows: 3 },
+        })
+        previewed.focus()
+        previewed.setSelection(previewed.input.value.length)
+        previewed.showCompletions()
+        const ghost = previewed.element.querySelector('.litearea-ghost')
+        check(ghost !== null, 'an inline completion must build a preview element')
+        if (ghost !== null) {
+          check(
+            ghost.dataset.open === 'true',
+            'opening the list must show the preview of the active row',
+          )
+          check(
+            ghost.textContent === 'cle ',
+            'the preview must be the part of the row that is not typed yet (got ' +
+              JSON.stringify(ghost.textContent) + ')',
+          )
+          const typedSpan = [...paintOf(previewed).children]
+            .reverse()
+            .find((span) => span.textContent === 'cir')
+          check(typedSpan !== undefined, 'the fixture must paint the typed prefix')
+          if (typedSpan !== undefined) {
+            const typedBox = typedSpan.getBoundingClientRect()
+            const ghostBox = ghost.getBoundingClientRect()
+            check(
+              Math.abs(ghostBox.left - typedBox.right) <= 2,
+              'the preview must start where the next character would land (preview ' +
+                ghostBox.left + ', caret ' + typedBox.right + ')',
+            )
+            check(
+              Math.abs(ghostBox.top - typedBox.top) <= 2,
+              'the preview must sit on the caret line (preview ' + ghostBox.top +
+                ', line ' + typedBox.top + ')',
+            )
+          }
+          check(
+            paintOf(previewed).textContent === previewed.input.value,
+            'a preview of an edit must not change the painted document',
+          )
+          // Accepting is the ordinary accept, and the preview goes with the list.
+          press(previewed.input, 'Tab')
+          check(
+            previewed.input.value === 'draw circle ',
+            'accepting a previewed row must write it, append and all (got ' +
+              JSON.stringify(previewed.input.value) + ')',
+          )
+          check(
+            ghost.dataset.open === 'false',
+            'accepting must take the preview away',
+          )
+        }
+
+        // ── 14. the edits the editor makes on the reader's behalf ──────────
+        // Auto-closing, skipping the closer it inserted, wrapping a selection, the
+        // comment toggle, and the block Enter are all edits the LIBRARY performs, which
+        // makes one claim about them worth more than the rest put together: they go
+        // through the browser's editing pipeline, so Ctrl+Z takes them back as one edit.
+        // No stub can answer that, and getting it wrong is the exact failure this
+        // library exists to correct — an editor that writes text it cannot undo.
+        //
+        // The harness drives beforeinput the way a browser does: it dispatches the
+        // event and, when nothing cancelled it, performs the insertion the browser would
+        // have performed. That is what makes the control meaningful — a handler that
+        // cancelled nothing would still see the text appear.
+        const editable = api.defineGrammar({
+          id: 'editable-fixture',
+          rules: [{ kind: 'match', scope: 'word', pattern: /[a-z]+/ }],
+          pairs: [
+            { open: '(', close: ')' },
+            { open: '{', close: '}' },
+            { open: '"', close: '"', notIn: ['quote'] },
+          ],
+          comments: { line: '#', block: ['/*', '*/'] },
+        })
+
+        const type = (field, text) => {
+          const event = new InputEvent('beforeinput', {
+            inputType: 'insertText',
+            data: text,
+            bubbles: true,
+            cancelable: true,
+          })
+          if (field.dispatchEvent(event)) document.execCommand('insertText', false, text)
+        }
+
+        const blank = mount(editable, '')
+        blank.focus()
+        type(blank.input, '(')
+        check(
+          blank.input.value === '()',
+          'typing an opening delimiter must close it (got ' + JSON.stringify(blank.input.value) + ')',
+        )
+        check(
+          blank.input.selectionStart === 1,
+          'the caret must be left between the delimiters (at ' + blank.input.selectionStart + ')',
+        )
+
+        // The closer the editor inserted is stepped over, not doubled.
+        type(blank.input, ')')
+        check(
+          blank.input.value === '()' && blank.input.selectionStart === 2,
+          'typing the closing delimiter must step over the one already there (got ' +
+            JSON.stringify(blank.input.value) + ' at ' + blank.input.selectionStart + ')',
+        )
+
+        // An edit the editor made is ONE edit in the browser's history. This is the claim
+        // the whole section exists for.
+        document.execCommand('undo')
+        check(
+          blank.input.value === '',
+          'undoing an auto-closed pair must take back both characters (got ' +
+            JSON.stringify(blank.input.value) + ')',
+        )
+
+        const wrapped = mount(editable, 'alpha')
+        wrapped.focus()
+        wrapped.setSelection(0, 5)
+        type(wrapped.input, '(')
+        check(
+          wrapped.input.value === '(alpha)',
+          'typing a delimiter over a selection must wrap it (got ' +
+            JSON.stringify(wrapped.input.value) + ')',
+        )
+        check(
+          wrapped.input.selectionStart === 1 && wrapped.input.selectionEnd === 6,
+          'the wrapped text must stay selected (got ' + wrapped.input.selectionStart + '..' +
+            wrapped.input.selectionEnd + ')',
+        )
+
+        const commented = mount(editable, 'one\ntwo')
+        commented.focus()
+        commented.setSelection(0, commented.input.value.length)
+        commented.input.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true, cancelable: true }),
+        )
+        check(
+          commented.input.value === '# one\n# two',
+          'the comment toggle must comment out every line the selection touches (got ' +
+            JSON.stringify(commented.input.value) + ')',
+        )
+        document.execCommand('undo')
+        check(
+          commented.input.value === 'one\ntwo',
+          'undoing the comment toggle must take the markers back (got ' +
+            JSON.stringify(commented.input.value) + ')',
+        )
+
+        const opened = mount(editable, '{}')
+        opened.focus()
+        opened.setSelection(1)
+        press(opened.input, 'Enter')
+        check(
+          opened.input.value === '{\n  \n}',
+          'Enter between a declared pair must open an indented block (got ' +
+            JSON.stringify(opened.input.value) + ')',
+        )
+        check(
+          opened.input.selectionStart === 4,
+          'the caret must land on the indented line (at ' + opened.input.selectionStart + ')',
+        )
+
+        // A control for the pair rules: in front of a word the pair stays open, because
+        // an opening paren followed by the word is how that gets written.
+        const beforeWord = mount(editable, 'value')
+        beforeWord.focus()
+        beforeWord.setSelection(0)
+        type(beforeWord.input, '(')
+        check(
+          beforeWord.input.value === '(value',
+          'a delimiter typed in front of a word must not close itself (got ' +
+            JSON.stringify(beforeWord.input.value) + ')',
+        )
+
+        // ── 15. the layer scrolls exactly as far as the field ──────────────
+        // The claim the paint exists for is that it shows the same characters in the same
+        // places as the field. Scrolling is where that can break silently, and it broke in
+        // two ways that no unit test could see:
+        //
+        //   1. a document ending in a newline has a final EMPTY line, which a textarea
+        //      lays out and a pre-wrap div does not — so the paint was one line short and
+        //      the field could scroll past the end of the text;
+        //   2. a field with a scrollbar of its OWN (the resizable mode, where the host
+        //      owns the height) wraps in a narrower space than the layer, so the two
+        //      disagreed about where every line ends.
+        //
+        // Both are measured here, and the scroll offsets are compared directly: a layer
+        // that lags by even one line is the failure that looks like the caret detaching
+        // from the word under it.
+        const scrolling = api.defineGrammar({
+          id: 'scrolling-fixture',
+          rules: [{ kind: 'match', scope: 'word', pattern: /[a-z]+/ }],
+        })
+
+        /** A document of N numbered lines, ending in a newline or not. */
+        const linesText = (lines, trailing) => {
+          const out = []
+          for (let line = 1; line <= lines; line += 1) out.push('line ' + line)
+          return out.join('\n') + (trailing ? '\n' : '')
+        }
+
+        /** The geometry of one editor, with its content scrolled to the bottom. */
+        const scrolledToBottom = (editor) => {
+          editor.input.scrollTop = 1000000
+          const padOf = (element) => {
+            const styles = getComputedStyle(element)
+            return parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight)
+          }
+          const layer = layerOf(editor)
+          return {
+            fieldTop: editor.input.scrollTop,
+            layerTop: layer.scrollTop,
+            fieldHeight: editor.input.scrollHeight,
+            layerHeight: layer.scrollHeight,
+            fieldWidth: editor.input.clientWidth - padOf(editor.input),
+            layerWidth: layer.clientWidth - padOf(layer),
+          }
+        }
+
+        const cases = [
+          ['a document ending in a newline', linesText(20, true), { maxRows: 5 }],
+          ['a document ending in a character', linesText(20, false), { maxRows: 5 }],
+          ['a field with its own scrollbar', linesText(20, true), { autoGrow: false, minRows: 5 }],
+        ]
+
+        for (const [label, text, sizing] of cases) {
+          const editor = mount(scrolling, text, { sizing: sizing, completion: false })
+          editor.focus()
+          // One frame for the measurement that writes the box's height, then the scroll.
+          await wait(60)
+          const geometry = scrolledToBottom(editor)
+          await wait(60)
+          check(
+            geometry.fieldTop === geometry.layerTop,
+            label + ': the layer must scroll with the field (field ' + geometry.fieldTop +
+              ', layer ' + geometry.layerTop + ')',
+          )
+          check(
+            geometry.fieldHeight === geometry.layerHeight,
+            label + ': the layer and the field must have the same scrollable height (field ' +
+              geometry.fieldHeight + ', layer ' + geometry.layerHeight + ')',
+          )
+          check(
+            Math.abs(geometry.fieldWidth - geometry.layerWidth) <= 1,
+            label + ': the layer must wrap in the same width as the field (field ' +
+              geometry.fieldWidth + ', layer ' + geometry.layerWidth + ')',
+          )
+          check(
+            paintOf(editor).textContent === editor.input.value,
+            label + ': the paint must still reproduce the document exactly',
+          )
+        }
+
         // A host's own write at the very end: it must be accepted without throwing,
         // and it is deliberately not a check, because a direct assignment is exactly
         // what the control above proved the pipeline does not record.

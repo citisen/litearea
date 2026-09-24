@@ -30,6 +30,8 @@
 // second element with the same typography and asks that instead.
 
 import type {
+  AutoPair,
+  CommentSyntax,
   Completion,
   Decoration,
   Diagnostic,
@@ -43,10 +45,12 @@ import type { Inspection } from '../core/inspect.js'
 import type { SegmentInput } from '../core/segments.js'
 import type { CompletionTrigger } from '../core/types.js'
 import { applyCompletion, complete } from '../core/complete.js'
+import { planBracketEnter, planCommentToggle, planPairTyping, type PendingEdit } from '../core/pairs.js'
 import { resolveHover } from '../core/hover.js'
 import { inspect } from '../core/inspect.js'
 import { resolveGrammar, isResolvedGrammar, type ResolvedGrammar } from '../core/scan.js'
-import { clamp } from '../core/text.js'
+import { buildStickyBlocks, type StickyBlock } from '../core/sticky.js'
+import { clamp, lineStarts, scopeAt } from '../core/text.js'
 import { decorationClass, injectStyles, scopeClass, severityClass } from '../styles.js'
 import {
   readSelection,
@@ -61,6 +65,8 @@ import {
 import { TextMirror } from './mirror.js'
 import { Overlay } from './overlay.js'
 import { Popup } from './popup.js'
+import { Ghost } from './ghost.js'
+import { StickyHeaders } from './sticky.js'
 import { Tooltip } from './tooltip.js'
 import { withDefaults } from './support.js'
 
@@ -108,6 +114,20 @@ export interface LiteAreaCompletion {
   limit?: number
   /** Whether the documentation panel is shown. Default `true`. */
   showDocumentation?: boolean
+  /**
+   * Whether the active row is previewed inline at the caret. Default `false`.
+   *
+   * The preview is the part of the active row that is not typed yet, drawn as an
+   * opaque chip where the next character would land — so `circle ` grows out of `cir`
+   * without the reader looking away from the caret. It is a preview and not a mode:
+   * the list stays open, the arrows still move through it, Tab still accepts, and
+   * nothing about the document, the undo history, or the painted layer changes while
+   * it is on screen.
+   *
+   * A row whose insertion does not begin with what is already typed — a fuzzy match
+   * such as `rd` for `rounded` — has no suffix to preview, and shows none.
+   */
+  inline?: boolean
 }
 
 /** How the hover tooltip behaves. */
@@ -116,6 +136,34 @@ export interface LiteAreaHover {
   enabled?: boolean
   /** How long the pointer must rest, in milliseconds. Default 140. */
   delay?: number
+}
+
+/**
+ * Which blocks keep their header pinned while the block is on screen.
+ *
+ * The blocks are named by decoration kind rather than declared as a second list of
+ * ranges, because a grammar already has exactly one place to say what a block IS:
+ * `decorate`. A second vocabulary would be a second answer to the same question, and
+ * the two would disagree the first time a language changed.
+ *
+ *     const grammar = defineGrammar({
+ *       // …
+ *       decorate: ({ tokens }) => blocks(tokens).map((block) => ({
+ *         kind: 'block',
+ *         from: block.from,
+ *         to: block.to,
+ *       })),
+ *     })
+ *
+ *     createEditor(target, { grammar, sticky: { kinds: ['block'] } })
+ *
+ * Nesting is read from the ranges themselves, so a host that returns nested blocks —
+ * a function inside a class, say — gets a header stacked per level without saying
+ * anything further.
+ */
+export interface LiteAreaSticky {
+  /** The decoration kinds whose ranges are blocks. An empty list pins nothing. */
+  kinds: readonly string[]
 }
 
 /** Everything a host may configure. */
@@ -159,12 +207,24 @@ export interface LiteAreaOptions<State = unknown> {
   completion?: LiteAreaCompletion | false
   /** How tooltips behave, or `false` to switch them off entirely. */
   hover?: LiteAreaHover | false
+  /**
+   * Which decorations are blocks whose headers stay pinned, or `false` for none.
+   *
+   * Off by default: pinning rows is a visible change to the box, and an editor that
+   * has never declared a block has nothing to pin anyway.
+   */
+  sticky?: LiteAreaSticky | false
   /** Whether semantic decorations are painted. Default `true`. */
   decorations?: boolean
   /** Whether to inject the stylesheet. Default `true`. */
   injectStyles?: boolean
   /** A CSP nonce for the injected stylesheet. */
   styleNonce?: string
+  /**
+   * How many spaces one level of indentation is, for the block Enter opens between a
+   * declared pair. Default 2. A line already indented with tabs steps with a tab.
+   */
+  indentSize?: number
   /** Called after a user edit, with the new text. Not called for programmatic writes. */
   onChange?: (value: string) => void
   /** Called when the caret or selection moves. */
@@ -233,6 +293,13 @@ export class LiteArea<State = unknown> {
   private readonly sizing: ResolvedSizing
   private readonly completion: ResolvedCompletion | undefined
   private readonly hover: ResolvedHover | undefined
+  private readonly sticky: LiteAreaSticky | undefined
+  private readonly stickyHeaders: StickyHeaders | undefined
+  private readonly ghost: Ghost | undefined
+  /** The delimiter pairs and comment markers the language declared. */
+  private readonly pairs: readonly AutoPair[]
+  private readonly comments: CommentSyntax | undefined
+  private readonly indentSize: number
   private readonly paintDecorations: boolean
   private readonly handlers: LiteAreaOptions<State>
   private readonly injectedStyle: HTMLStyleElement | undefined
@@ -256,12 +323,22 @@ export class LiteArea<State = unknown> {
   private appliedScrollbar = -1
   /** The offset the tooltip last described, so a resting pointer does not re-query. */
   private hoverOffset: number | undefined
+  /**
+   * The inspection the cached sticky blocks were built from.
+   *
+   * Compared by identity, so a re-resolved grammar or a keystroke — both of which
+   * produce a new inspection — rebuild the blocks, while a scroll, which does not,
+   * reuses them.
+   */
+  private stickySource: Inspection<State> | undefined
+  private stickyBlocks: StickyBlock[] = []
   /** The custom properties this instance set, so one that disappears can be removed. */
   private appliedVariables = new Set<string>()
   private hoverTimer: number | undefined
-  /** Watches for a width change, which invalidates wrapping and the box height. */
+  /** Watches for a change of box, which invalidates wrapping, the height, and the scrollbar. */
   private resizeObserver: ResizeObserver | undefined
   private observedWidth = -1
+  private observedHeight = -1
   /**
    * A signature of the last announced problem list, so the host is told once.
    *
@@ -303,14 +380,23 @@ export class LiteArea<State = unknown> {
       options.completion === false
         ? undefined
         : withDefaults<ResolvedCompletion>(
-            { auto: true, triggerCharacters: '', limit: 100, showDocumentation: true },
+            { auto: true, triggerCharacters: '', limit: 100, showDocumentation: true, inline: false },
             options.completion,
           )
     this.hover =
       options.hover === false
         ? undefined
         : withDefaults<ResolvedHover>({ enabled: true, delay: 140 }, options.hover)
+    const sticky = options.sticky === false ? undefined : options.sticky
+    this.sticky =
+      sticky === undefined || sticky.kinds.length === 0 ? undefined : { kinds: sticky.kinds }
     this.paintDecorations = options.decorations !== false
+    // Read from the DECLARED grammar rather than the resolved one: pairs and comments
+    // are passed through resolution untouched, and a host that swaps its grammar object
+    // under a live editor (which `refresh` exists for) gets the new pairs with it.
+    this.pairs = this.declaredGrammar.pairs ?? []
+    this.comments = this.declaredGrammar.comments
+    this.indentSize = Math.max(0, options.indentSize ?? 2)
 
     if (options.injectStyles !== false) {
       this.injectedStyle = injectStyles(this.document, options.styleNonce)
@@ -334,6 +420,19 @@ export class LiteArea<State = unknown> {
       severity: severityClass,
     })
     this.box.appendChild(this.overlay.element)
+
+    // Between the layer and the field, and that position is the whole affordance: the
+    // field's own text is transparent, so a pinned row shows through it and a click
+    // inside the row still lands in the text. Above the field it would be visible in
+    // the same place and would swallow that click.
+    this.stickyHeaders = this.sticky === undefined ? undefined : new StickyHeaders(this.document)
+    if (this.stickyHeaders !== undefined) this.box.appendChild(this.stickyHeaders.element)
+
+    // Under the field, like the layer: the preview is opaque, the field's own text is
+    // transparent, and the native caret is drawn by the field on top — so the chip
+    // covers the characters it previews over and never covers the caret.
+    this.ghost = this.completion?.inline === true ? new Ghost(this.document) : undefined
+    if (this.ghost !== undefined) this.box.appendChild(this.ghost.element)
 
     this.input = this.document.createElement('textarea')
     this.input.className = 'litearea-input'
@@ -386,11 +485,21 @@ export class LiteArea<State = unknown> {
     if (typeof Observer === 'function') {
       this.resizeObserver = new Observer(() => {
         const width = this.element.clientWidth
-        if (width === this.observedWidth) return
+        const height = this.element.clientHeight
+        // The HEIGHT matters as much as the width in the resizable mode: dragging the
+        // grip changes whether the field has a scrollbar at all, and a scrollbar narrows
+        // the text. In the auto-grow mode a height change is this editor's own doing and
+        // settles in one extra pass, because the height it recomputes is the height it
+        // already wrote.
+        if (width === this.observedWidth && height === this.observedHeight) return
         this.observedWidth = width
+        this.observedHeight = height
         this.mirror.adopt(this.input)
         this.resize(this.input.value)
         this.placePopup()
+        // A new width rewraps every line, so a block whose header was pinned may no
+        // longer be the block under the reader's eye.
+        if (this.current !== undefined) this.syncSticky(this.current)
       })
       this.resizeObserver.observe(this.element)
     }
@@ -586,6 +695,8 @@ export class LiteArea<State = unknown> {
     if (this.hoverTimer !== undefined) this.view?.clearTimeout(this.hoverTimer)
     this.popup.destroy()
     this.tooltip.destroy()
+    this.stickyHeaders?.destroy()
+    this.ghost?.destroy()
     this.overlay.destroy()
     this.mirror.destroy()
     // The injected sheet is shared by every editor on the page, so it stays:
@@ -615,6 +726,7 @@ export class LiteArea<State = unknown> {
     this.resize(text)
     this.overlay.syncScroll(this.input)
     this.announceDiagnostics(inspection)
+    this.syncSticky(inspection)
   }
 
   /** Paint the layer, and mark the box when a problem is an error. */
@@ -650,6 +762,66 @@ export class LiteArea<State = unknown> {
     this.handlers.onDiagnostics(inspection.diagnostics)
   }
 
+  // ── sticky headers ────────────────────────────────────────────────────────
+
+  /**
+   * Pin the headers of the blocks the reader is inside.
+   *
+   * The blocks are rebuilt only when the inspection is a new one, and the painted
+   * character runs are cached by the strip until the paint changes, so the cost of a
+   * scroll frame is one walk that has already been paid for plus a `Range` per block
+   * edge. That is what keeps this affordable on the scroll path, where a full scan
+   * per frame would not be.
+   *
+   * An unmounted or zero-width field is cleared rather than measured, for the same
+   * reason `resize` skips it: before there is a layout there is no line to pin, and a
+   * row placed from nothing would sit at the top of a box that has not been laid out.
+   *
+   * @param inspection - the current inspection, which carries the decorations.
+   */
+  private syncSticky(inspection: Inspection<State>): void {
+    const headers = this.stickyHeaders
+    const kinds = this.sticky?.kinds
+    if (headers === undefined || kinds === undefined) return
+    if (!this.input.isConnected || this.input.clientWidth === 0) {
+      headers.clear()
+      return
+    }
+
+    if (this.stickySource !== inspection) {
+      const wanted = new Set(kinds)
+      const ranges = inspection.decorations
+        .map((decoration, index) => ({ decoration, index }))
+        .filter(({ decoration }) => wanted.has(decoration.kind))
+        .map(({ decoration, index }) => ({
+          // The kind and the offset identify a block across repaints well enough to
+          // keep a row's identity stable; the index only breaks a tie between two
+          // decorations that start at the same character.
+          id: `${decoration.kind}@${String(decoration.from)}:${String(index)}`,
+          from: decoration.from,
+          to: decoration.to,
+        }))
+      this.stickyBlocks = buildStickyBlocks(ranges, lineStarts(inspection.text))
+      this.stickySource = inspection
+      headers.invalidate()
+    }
+
+    if (this.stickyBlocks.length === 0) {
+      headers.clear()
+      return
+    }
+
+    const layer = this.overlay.element.getBoundingClientRect()
+    headers.render({
+      text: inspection.text,
+      paint: this.overlay.paintElement,
+      container: this.box,
+      view: { top: layer.top, bottom: layer.bottom },
+      blocks: this.stickyBlocks,
+      lineHeight: this.mirror.lineHeight(this.input),
+    })
+  }
+
   /**
    * Size the box to its content.
    *
@@ -666,6 +838,11 @@ export class LiteArea<State = unknown> {
    * therefore published as a custom property, and the stylesheet adds it to the
    * layer's own right padding so the two keep wrapping identically.
    *
+   * That applies to BOTH sizing modes, which is why the width is published in the
+   * early-return path too: a host that owns the height does not own the width, and a
+   * clamped field of its own — `resize: vertical`, or a `rows` attribute smaller than
+   * the document — has a scrollbar the paint has to make room for just the same.
+   *
    * An UNMOUNTED field is skipped rather than measured. Before the element is in the
    * document it has no layout, so its `clientWidth` is zero, the mirror wraps at every
    * character, and the measurement comes back several times too tall — a wrong height
@@ -679,6 +856,7 @@ export class LiteArea<State = unknown> {
       // Still adopted, because caret geometry depends on the mirror being shaped like
       // the field even when the field's height is the host's business.
       this.mirror.adopt(this.input)
+      this.publishScrollbar()
       return
     }
     if (!this.input.isConnected || this.input.clientWidth === 0) return
@@ -710,14 +888,31 @@ export class LiteArea<State = unknown> {
       this.input.style.overflowY = overflow
       this.appliedOverflow = overflow
     }
-    // Read AFTER the overflow is applied, because that is when a scrollbar exists
-    // and therefore when there is a width to report.
-    const scrollbar = overflow === 'auto' ? this.input.offsetWidth - this.input.clientWidth : 0
-    const width = Math.max(0, scrollbar)
-    if (width !== this.appliedScrollbar) {
-      this.element.style.setProperty('--litearea-scrollbar', `${String(width)}px`)
-      this.appliedScrollbar = width
-    }
+    // Read AFTER the overflow is applied, because that is when a scrollbar exists and
+    // therefore when there is a width to report.
+    this.publishScrollbar()
+  }
+
+  /**
+   * Publish the width the field's scrollbar takes, for the layer to make room for.
+   *
+   * Measured from the field rather than derived from what this editor decided, because
+   * the scrollbar may not be its doing at all: in the resizable mode the host's own
+   * stylesheet gives the field `overflow-y: auto`, and a width this editor never set is
+   * still a width the paint has to wrap inside. The measurement is only trusted when the
+   * field can actually scroll and its content actually overflows, so a border a host puts
+   * on the field is not mistaken for a scrollbar.
+   */
+  private publishScrollbar(): void {
+    const styles = this.view?.getComputedStyle(this.input)
+    const scrolls = styles?.overflowY === 'auto' || styles?.overflowY === 'scroll'
+    const width =
+      scrolls && this.input.scrollHeight > this.input.clientHeight
+        ? Math.max(0, this.input.offsetWidth - this.input.clientWidth)
+        : 0
+    if (width === this.appliedScrollbar) return
+    this.element.style.setProperty('--litearea-scrollbar', `${String(width)}px`)
+    this.appliedScrollbar = width
   }
 
   // ── completion ────────────────────────────────────────────────────────────
@@ -757,9 +952,65 @@ export class LiteArea<State = unknown> {
     if (this.completionState === undefined && !this.popup.isOpen) return
     this.completionState = undefined
     this.popup.close()
+    this.ghost?.hide()
     this.input.setAttribute('aria-expanded', 'false')
     this.input.removeAttribute('aria-activedescendant')
     this.handlers.onCompletion?.(undefined)
+  }
+
+  /**
+   * What the active row would add beyond what is already typed.
+   *
+   * The row's own edit is computed with `applyCompletion` rather than by concatenating
+   * `label` and `append` here, so a preview and the edit that follows it cannot
+   * disagree about a caret offset, a `mode`, or an append the document already has.
+   *
+   * @returns the suffix to preview, or `undefined` when there is nothing honest to
+   *   show — no list, a row that inserts before the caret, or a fuzzy match whose
+   *   insertion does not begin with the typed prefix.
+   */
+  private ghostSuffix(): string | undefined {
+    const state = this.completionState
+    if (state === undefined || this.completion?.inline !== true) return undefined
+    const row = this.popup.activeRow?.item
+    if (row === undefined || row.mode === 'before') return undefined
+    const typed = this.input.value.slice(state.range.from, this.caret())
+    const applied = applyCompletion(this.input.value, state.range, row)
+    if (typed === '') return applied.insert
+    if (!applied.insert.startsWith(typed)) return undefined
+    return applied.insert.slice(typed.length)
+  }
+
+  /**
+   * Place, move, or hide the inline preview.
+   *
+   * Called wherever the caret or the active row can have moved, because the preview is
+   * a function of both: the same row previews a different suffix as the reader types,
+   * and the same suffix belongs at a different place as the caret moves.
+   */
+  private syncGhost(): void {
+    const ghost = this.ghost
+    if (ghost === undefined) return
+    const suffix = this.ghostSuffix()
+    if (suffix === undefined || suffix === '') {
+      ghost.hide()
+      return
+    }
+    const box = this.mirror.caretBox(this.input, this.caret())
+    if (box === undefined) {
+      ghost.hide()
+      return
+    }
+    // The mirror reports relative to the field's border box and the preview is placed
+    // against the wrapper, so both rects are measured rather than `offsetLeft`
+    // arithmetic — the same reason the popup does it this way.
+    const inputRect = this.input.getBoundingClientRect()
+    const elementRect = this.element.getBoundingClientRect()
+    ghost.show(suffix, {
+      x: inputRect.left - elementRect.left + box.x,
+      y: inputRect.top - elementRect.top + box.y,
+      height: box.height,
+    })
   }
 
   /** Keep the field's `aria-activedescendant` pointing at the active row. */
@@ -771,9 +1022,15 @@ export class LiteArea<State = unknown> {
 
   /** Put the list under the caret. */
   private placePopup(): void {
-    if (this.completionState === undefined) return
+    if (this.completionState === undefined) {
+      this.ghost?.hide()
+      return
+    }
     const box = this.mirror.caretBox(this.input, this.caret())
-    if (box === undefined) return
+    if (box === undefined) {
+      this.ghost?.hide()
+      return
+    }
     // The mirror reports relative to the field's border box; the list is positioned
     // against the wrapper. Measuring both rects is used rather than `offsetLeft`
     // arithmetic, because `offsetParent` changes as soon as a host wraps the editor
@@ -789,6 +1046,7 @@ export class LiteArea<State = unknown> {
       this.element,
       { width: this.view?.innerWidth ?? 0, height: this.view?.innerHeight ?? 0 },
     )
+    this.syncGhost()
   }
 
   /**
@@ -924,6 +1182,7 @@ export class LiteArea<State = unknown> {
 
   /** Attach every listener. */
   private bind(): void {
+    this.input.addEventListener('beforeinput', this.onBeforeInput)
     this.input.addEventListener('input', this.onInput)
     this.input.addEventListener('keydown', this.onKeyDown)
     this.input.addEventListener('scroll', this.onScroll)
@@ -940,6 +1199,7 @@ export class LiteArea<State = unknown> {
 
   /** Detach every listener. */
   private unbind(): void {
+    this.input.removeEventListener('beforeinput', this.onBeforeInput)
     this.input.removeEventListener('input', this.onInput)
     this.input.removeEventListener('keydown', this.onKeyDown)
     this.input.removeEventListener('scroll', this.onScroll)
@@ -967,6 +1227,89 @@ export class LiteArea<State = unknown> {
     if (!this.applying) this.handlers.onChange?.(this.input.value)
   }
 
+  /**
+   * Intercept a single typed character that a declared pair has an opinion about.
+   *
+   * `beforeinput` rather than `keydown` because this is about the CHARACTER, not about
+   * the key: it carries what the browser is about to insert, which is the same thing
+   * regardless of the keyboard layout, an IME, or a paste of one character. The default
+   * is prevented and the edit is written through the same pipeline as everything else,
+   * so the browser records it as one undoable edit.
+   */
+  private readonly onBeforeInput = (event: Event): void => {
+    if (this.pairs.length === 0 || this.input.readOnly || this.composing) return
+    const input = event as InputEvent
+    if (input.inputType !== 'insertText') return
+    const typed = input.data
+    if (typeof typed !== 'string' || typed.length !== 1) return
+
+    const selection = readSelection(this.input)
+    const action = planPairTyping({
+      text: this.input.value,
+      from: selection.start,
+      to: selection.end,
+      typed,
+      pairs: this.pairs,
+      scope: this.current === undefined ? undefined : scopeAt(this.current.tokens, selection.start),
+      wordChars: this.grammar.wordChars,
+    })
+    if (action === undefined) return
+
+    event.preventDefault()
+    if (action.kind === 'skip') {
+      // Nothing is written: the delimiter is already there, so the reader is stepping
+      // over the one the editor put there a keystroke ago.
+      writeSelection(this.input, action.caret)
+      return
+    }
+    this.applyEdit(action.edit)
+  }
+
+  /**
+   * Write one of the editor's own edits and place the selection.
+   *
+   * The `input` event the pipeline fires arrives while the editor is applying, so it is
+   * swallowed — the same state that keeps a host from being handed its own `setValue`
+   * back. An edit made on the reader's behalf is the reader's edit, though: the field
+   * changed under their fingers, so the host is told here rather than never.
+   *
+   * @param edit - the range to replace, the text to write, and the selection to leave.
+   */
+  private applyEdit(edit: PendingEdit): void {
+    this.applying = true
+    try {
+      replaceThroughPipeline(this.input, edit.from, edit.to, edit.text)
+      writeSelection(this.input, edit.selection.from, edit.selection.to)
+    } finally {
+      this.applying = false
+    }
+    this.sync()
+    this.handlers.onChange?.(this.input.value)
+  }
+
+  /**
+   * Open a block on Enter between a declared pair.
+   *
+   * The default is prevented only when there is an edit to make, so a plain Enter is
+   * still the browser's own newline — and still its own undoable edit.
+   *
+   * @param event - the keydown, cancelled when a block is opened.
+   * @returns whether the key was handled.
+   */
+  private enterBracket(event: KeyboardEvent): boolean {
+    if (this.pairs.length === 0) return false
+    const edit = planBracketEnter({
+      text: this.input.value,
+      caret: this.caret(),
+      pairs: this.pairs,
+      indentSize: this.indentSize,
+    })
+    if (edit === undefined) return false
+    event.preventDefault()
+    this.applyEdit(edit)
+    return true
+  }
+
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     // First, because a keystroke a row asked for is a pick and not text.
     if (this.commitCharacter(event)) return
@@ -981,6 +1324,26 @@ export class LiteArea<State = unknown> {
       return
     }
 
+    // The comment toggle is refused while the list is open, because `Ctrl+/` is a
+    // separator in most languages and a list that is open over the line the reader is
+    // commenting out would be filtering on text that is about to change under it.
+    if (event.key === '/' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+      if (this.comments !== undefined && !this.popup.isOpen) {
+        const edit = planCommentToggle({
+          text: this.input.value,
+          from: this.input.selectionStart,
+          to: this.input.selectionEnd,
+          syntax: this.comments,
+        })
+        if (edit !== undefined) {
+          event.preventDefault()
+          this.applyEdit(edit)
+          return
+        }
+      }
+      return
+    }
+
     if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault()
       if (this.popup.isOpen) this.closeCompletion()
@@ -988,7 +1351,12 @@ export class LiteArea<State = unknown> {
       return
     }
 
-    if (!this.popup.isOpen) return
+    if (!this.popup.isOpen) {
+      // Enter between a declared pair opens a block rather than a line. Only with the
+      // list closed: with it open, Enter is a pick, and a pick beats a bracket.
+      if (event.key === 'Enter' && !event.shiftKey && !this.composing) this.enterBracket(event)
+      return
+    }
     const last = this.popup.items.length - 1
 
     switch (event.key) {
@@ -1046,12 +1414,18 @@ export class LiteArea<State = unknown> {
   private setActive(index: number): void {
     this.popup.setActive(index)
     this.syncActiveDescendant()
+    // The preview follows the list rather than the caret: arrowing to another row
+    // previews THAT row, which is the whole point of having both on screen.
+    this.syncGhost()
   }
 
   private readonly onScroll = (): void => {
     this.overlay.syncScroll(this.input)
     this.placePopup()
     this.hideTooltip()
+    // The pinned rows are a function of where the lines are, and scrolling is the one
+    // event that moves every line without changing a character of the text.
+    if (this.current !== undefined) this.syncSticky(this.current)
   }
 
   private readonly onCaretMoved = (): void => {

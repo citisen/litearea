@@ -174,6 +174,9 @@ undoable, and it does not call `onChange` — the caller already knows what it w
 | Diagnostics | A vocabulary's rejection, declarative `checks`, and a `validate` hook, merged, deduplicated, and painted as squiggles in four severities |
 | Hover tooltips | `resolveHover`: a diagnostic outranks everything else; otherwise a decoration's title and the grammar's own `describe` are shown together |
 | Semantic marks | `decorate` returns ranges that are deliberately not tokens, painted as `litearea-dec-<kind>` and recomputed without re-lexing |
+| Sticky block headers | Decoration kinds named by `sticky.kinds` are blocks; the header line of the block the reader is inside is copied to the top of the box, one row per level of nesting |
+| Inline completion preview | With `completion.inline`, the part of the active row that is not typed yet is drawn as an opaque chip where the next character would land |
+| Typing aids | A grammar's `pairs` close themselves, step over their own closer, and wrap a selection; `comments` drives the comment toggle; Enter between a pair opens an indented block. Every one of these edits goes through the browser's pipeline, so one Ctrl+Z takes it back |
 | Auto-sizing | An offscreen mirror is measured instead of the live field; height and overflow are written, and the measured scrollbar width is published for the layer |
 | One parse per text | `inspect` produces tokens, diagnostics, decorations, and the analysis together, cached on the text; the paint is skipped when text and analysis are unchanged |
 | Keyboard and a11y | `role="combobox"`, `aria-expanded`, `aria-activedescendant`, `aria-invalid`, `aria-label`, and a listbox with real row ids |
@@ -373,17 +376,134 @@ The three behaviours the brief above adds up to:
   `overflow-y` becomes `auto`. A scrollbar narrows the text, so the measured
   scrollbar width is published as `--litearea-scrollbar` and added to the layer's
   own padding, or the paint would wrap differently from the field and every
-  colour would slide off its character.
+  colour would slide off its character. The same measurement is published in the
+  resizable mode below, where the scrollbar is the host's doing and not this
+  option's.
 - **A minimum sets the floor**: `minHeight`, or `minRows` worth of line boxes,
   plus the field's vertical padding and border. A maximum below the minimum is
   raised to the minimum rather than honoured, because honouring it would make the
   box smaller than the host said it could be.
+- **A document that ends in a newline is one line taller than it looks.** A textarea
+  lays out the empty line after that newline and a `pre-wrap` div does not, so the
+  paint earns it with a trailing `<br>` — an element, not a character, which keeps
+  the painted text exactly the field's value. Without it the field could scroll one
+  line past the text, and the caret would walk away from the word under it.
 
 An unmounted field is not measured at all: before the element is in the document
 it has no layout, so its width is zero and the measurement comes back several
 times too tall. `createEditor` does the first measurement synchronously after
 mounting for exactly this reason, and a host constructing `LiteArea` directly
 should call `refresh()` after appending `editor.element`.
+
+## Sticky block headers
+
+A long block that has scrolled past its own header is a block the reader can no longer
+name. Name the blocks as decorations and the header line stays pinned at the top of the
+box for as long as the reader is inside that block:
+
+```ts
+const grammar = defineGrammar({
+  id: 'groups',
+  rules: [{ kind: 'match', scope: 'keyword', pattern: /group/ }],
+  // A range per block. Nesting is read from the ranges themselves.
+  decorate: (text) => blocksOf(text).map((block) => ({ kind: 'block', ...block })),
+})
+
+createEditor(target, { grammar, sticky: { kinds: ['block'] } })
+```
+
+`sticky` is off unless it is passed. `kinds` names the decoration kinds that are
+blocks — the ranges are the same ones `decorate` already returns, so a language says
+what a block is in exactly one place, and a nested block (a function inside a class)
+stacks its own row below its parent's without anything further being declared.
+
+Three decisions are worth knowing:
+
+- **The rows are copies of the painted line**, class for class, so a pinned header keeps
+  the colours it had in the text. They are rebuilt from the painted runs rather than
+  cloned as a `Range`, because a line that lies inside one painted span is a *partially*
+  selected node and a range clone would drop its element — and with it its colour.
+- **The strip takes no pointer events and sits between the layer and the field.** The
+  field's own text is transparent, so a pinned row shows through it and a click inside
+  the row still places the caret. Putting the strip above the field would buy a
+  click-to-scroll affordance at the price of the commonest gesture in the editor.
+- **A header stops being pinned as soon as its block's last line leaves the top of the
+  box**, compared by that line's bottom edge — comparing tops would unpin one line early
+  and flash the next header into place while the previous block's last line is still on
+  screen.
+
+Nothing about it moves a glyph in the paint, which is why it does not disturb
+alignment. The only cost is the measurement: one walk of the painted text nodes, cached
+until the paint changes, plus a `Range` for each edge of each block.
+
+## Inline completion preview
+
+`completion.inline` draws the active row's remaining text at the caret, so the reader
+watches `cir` become `circle ` without looking away from what they are typing:
+
+```ts
+createEditor(target, { grammar, completion: { inline: true } })
+```
+
+It is a **preview, not a mode**. The list still opens, the arrows still move through it,
+the preview follows the active row, and Tab accepts exactly what it would have accepted
+without the preview. Nothing about the document, the undo history, or the painted layer
+changes while it is on screen — which is what makes it safe to leave on.
+
+Three things it does not do, deliberately:
+
+- **It is not transparent.** It stands where characters that really exist would stand, so
+  a transparent preview would put two texts in one place in the same font, one legible
+  and one not. It is an opaque chip over the text it previews past.
+- **It has no padding or border.** Its first glyph has to be exactly where the caret is,
+  or the preview lies about the word it is growing into.
+- **It shows nothing rather than something wrong.** A row whose insertion does not begin
+  with what is already typed — a fuzzy match such as `rd` for `rounded` — has no suffix to
+  draw, and draws none. `applyCompletion` computes both the preview and the edit that
+  follows it, so the two cannot disagree.
+
+## Typing aids
+
+Two optional fields on the grammar, and the editor maintains them while the reader types:
+
+```ts
+const grammar = defineGrammar({
+  id: 'example',
+  rules: […],
+  pairs: [
+    { open: '(', close: ')' },
+    { open: '{', close: '}' },
+    // A delimiter a language must not close inside something: a string, typically.
+    { open: '"', close: '"', notIn: ['string'] },
+  ],
+  comments: { line: '#' },
+})
+
+createEditor(target, { grammar, indentSize: 2 })
+```
+
+| What the reader does | What happens |
+| --- | --- |
+| Types an opening delimiter | The pair closes itself and the caret is left between the two |
+| Types an opening delimiter over a selection | The selection is wrapped, and stays selected |
+| Types the closing delimiter the editor inserted | Nothing is written; the caret steps over it |
+| Types an opening delimiter in front of a word | Nothing special — `(` in front of `value` is how `(value` gets written |
+| Enter between an empty pair | `{\n  \n}`, with the caret on the indented line. A line already indented with tabs steps with a tab |
+| `Ctrl+/` / `Cmd+/` | Comments out every line the selection touches, or takes the markers back. Toggling twice restores the document |
+
+Three things worth knowing:
+
+- **The edits go through the browser's editing pipeline**, like a completion does, so one
+  Ctrl+Z takes back the whole thing — both characters of an auto-closed pair, every marker
+  of a multi-line toggle. `scripts/browser-check.mjs` asserts exactly that, because a
+  library that writes text it cannot undo is the failure this one exists to correct.
+- **`Ctrl+/` comments LINES when the language has a line marker**, whatever the selection
+  spans. A block pair is the answer for a language that has no line marker; a language
+  with both would want a second command for the block form rather than overloading the one
+  everybody knows.
+- **`pairs` and `comments` are the grammar's, not the option's.** Only the language knows
+  that a paren inside a comment is prose and a paren inside an expression is a bracket.
+  `indentSize` is a preference, so it lives on `createEditor`.
 
 ## Keyboard
 
@@ -524,7 +644,8 @@ change colour, background, and `text-decoration`, and nothing that moves a glyph
   `hasCaretHitTest()` reports whether the environment has either. Without one the
   tooltip simply never appears.
 - **Nothing here is a full editor.** There are no line numbers, no search, no
-  multiple cursors, no bracket matching, no folding, no snippets, and no undo
+  multiple cursors, no bracket MATCHING (a declared pair is closed while you type, but a
+  bracket's partner is never highlighted), no folding, no snippets, and no undo
   button — the browser's own history is the undo stack, and `editor.undo()` and
   `editor.redo()` are thin wrappers over it that report only whether the call was
   possible.

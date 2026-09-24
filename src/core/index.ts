@@ -5,7 +5,9 @@
 // for only one claim and everything else is asserted in plain Node.
 
 export type {
+  AutoPair,
   CheckRule,
+  CommentSyntax,
   Completion,
   CompletionContext,
   CompletionRow,
@@ -94,5 +96,25 @@ export {
 } from './complete.js'
 
 export { diagnosticHover, resolveHover } from './hover.js'
+
+export {
+  buildStickyBlocks,
+  planStickyHeaders,
+  type StickyBlock,
+  type StickyBox,
+  type StickyPlacement,
+  type StickyRangeInput,
+} from './sticky.js'
+
+export {
+  planBracketEnter,
+  planCommentToggle,
+  planPairTyping,
+  type BracketEnter,
+  type CommentToggle,
+  type PairAction,
+  type PairTyping,
+  type PendingEdit,
+} from './pairs.js'
 
 export { defineCompletion, defineGrammar } from './grammar.js'

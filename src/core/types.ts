@@ -611,6 +611,37 @@ export interface HoverContext<State = unknown> {
  * types. Leaving it out makes the state `unknown`, which is what a grammar with
  * no `analyze` wants.
  */
+/*
+ * A delimiter pair the editor keeps closed while the reader types, and the markers a
+ * language comments with. Both are declared by the grammar because both are facts about
+ * the language: only it knows that a paren inside a comment is prose and a paren inside
+ * an expression is a bracket.
+ */
+
+/** A pair the editor closes on the reader's behalf. */
+export interface AutoPair {
+  /** The opening delimiter. Typing it is what closes the pair. */
+  open: string
+  /** The closing delimiter. Typing it over an existing one is what skips. */
+  close: string
+  /**
+   * Scopes inside which the pair does NOT close itself.
+   *
+   * A string is the case this exists for: a quotation mark typed inside a comment is a
+   * quotation mark and not a delimiter, so a language that opens strings with one can
+   * say so and the editor will leave the reader alone there.
+   */
+  notIn?: readonly Scope[]
+}
+
+/** How a language comments out a line, or a run of them. */
+export interface CommentSyntax {
+  /** The marker that comments out the rest of a line, such as `#` or `//`. */
+  line?: string
+  /** Opening and closing markers for a run that may span lines, such as a C-style block. */
+  block?: readonly [string, string]
+}
+
 export interface Grammar<State = unknown> {
   /** A stable id, used as the default diagnostic `source` and for debugging. */
   id: string
@@ -638,6 +669,18 @@ export interface Grammar<State = unknown> {
 
   /** The initial state, used before `analyze` exists and when it is skipped. */
   initialState?: State
+
+  /**
+   * The delimiter pairs the editor keeps closed while the reader types.
+   *
+   * Declared rather than inferred, because only the language knows that a paren inside
+   * a comment is prose and a paren inside an expression is a bracket. A pair may name
+   * the scopes it must not close itself in — a string, typically.
+   */
+  pairs?: readonly AutoPair[]
+
+  /** How the language comments out a line, or a run of them, for the comment toggle. */
+  comments?: CommentSyntax
 
   /**
    * The single structural pass over the document.

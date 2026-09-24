@@ -15,7 +15,9 @@
 // and no framework.
 
 export type {
+  AutoPair,
   CheckRule,
+  CommentSyntax,
   Completion,
   CompletionContext,
   CompletionRow,
@@ -109,6 +111,26 @@ export {
 } from './core/complete.js'
 
 export { diagnosticHover, resolveHover } from './core/hover.js'
+
+export {
+  buildStickyBlocks,
+  planStickyHeaders,
+  type StickyBlock,
+  type StickyBox,
+  type StickyPlacement,
+  type StickyRangeInput,
+} from './core/sticky.js'
+
+export {
+  planBracketEnter,
+  planCommentToggle,
+  planPairTyping,
+  type BracketEnter,
+  type CommentToggle,
+  type PairAction,
+  type PairTyping,
+  type PendingEdit,
+} from './core/pairs.js'
 
 export { defineCompletion, defineGrammar } from './core/grammar.js'
 

@@ -211,10 +211,60 @@ ${scopeVariables('dark')}
 .litearea-paint {
   position: relative;
   min-height: 100%;
-  /* A zero-width space keeps the layer's last line box as tall as the field's:
-     a trailing newline would otherwise collapse in the paint alone, and the box
-     would jump the moment one was typed. */
+  /*
+   * min-height keeps the paint as tall as the BOX, which is what stops the box from
+   * jumping when the document is shorter than its minimum. It does not cover a document
+   * whose last line is empty, and it cannot: a trailing newline lays out a line in the
+   * field and not in a pre-wrap div, so the paint earns that line with a trailing br
+   * element instead — see Overlay.render. Without it the field scrolls one line further
+   * than the text, which is the one failure that looks like the caret detaching from its
+   * line.
+   */
   will-change: transform;
+}
+
+/*
+ * ── the pinned header rows ──────────────────────────────────────────────────
+ *
+ * The strip sits between the layer and the field, so it is painted over the ordinary
+ * text and under the caret and the selection. Disabling pointer events is therefore
+ * not needed to protect the editor's own gestures — it is here so that the empty part
+ * of the strip, which spans the full width, cannot intercept a drag that began on the
+ * text below it.
+ */
+.litearea-sticky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+/*
+ * One row per pinned header. The typography is repeated from the layer rather than
+ * inherited, because the strip's parent is the box and the box carries no type: the
+ * layer and the field are the two elements that do, and a row must match them or its
+ * characters would sit at different columns from the line it copies.
+ */
+.litearea-stickyRow {
+  position: absolute;
+  left: var(--litearea-padding-inline);
+  right: calc(var(--litearea-padding-inline) + var(--litearea-scrollbar, 0px));
+  overflow: hidden;
+  white-space: pre;
+  font-family: var(--litearea-font);
+  font-size: var(--litearea-font-size);
+  font-weight: 400;
+  font-variant-ligatures: none;
+  font-kerning: none;
+  font-feature-settings: "liga" 0, "calt" 0, "dlig" 0;
+  letter-spacing: normal;
+  word-spacing: normal;
+  tab-size: 2;
+  /* Opaque, because the rows replace the text they cover rather than sitting beside
+     it; a transparent row would let the scrolled line show through the pinned one. */
+  background: var(--litearea-bg);
+  box-shadow: 0 4px 8px color-mix(in oklab, var(--litearea-fg) 12%, transparent);
 }
 
 .litearea-input {
@@ -226,6 +276,40 @@ ${scopeVariables('dark')}
   caret-color: var(--litearea-fg);
   outline: none;
   overflow-y: hidden;
+}
+
+/*
+ * ── the inline completion preview ───────────────────────────────────────────
+ *
+ * One chip, placed where the next character would land. It is opaque because it stands
+ * where characters that really exist would stand: a transparent preview would put two
+ * texts at the same place in the same font, one legible and one not. It has no padding
+ * and no border for the same reason — its first glyph has to be exactly where the
+ * caret is, or the preview would lie about the word it is growing into.
+ */
+.litearea-ghost {
+  position: absolute;
+  display: none;
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
+  color: var(--litearea-fg-dim);
+  background: var(--litearea-bg-raised);
+  border-radius: 2px;
+  font-family: var(--litearea-font);
+  font-size: var(--litearea-font-size);
+  font-weight: 400;
+  font-variant-ligatures: none;
+  font-kerning: none;
+  font-feature-settings: "liga" 0, "calt" 0, "dlig" 0;
+  letter-spacing: normal;
+  word-spacing: normal;
+  tab-size: 2;
+}
+
+.litearea-ghost[data-open="true"] {
+  display: block;
 }
 
 .litearea-growable .litearea-input {

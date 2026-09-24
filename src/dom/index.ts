@@ -12,6 +12,7 @@ export {
   type LiteAreaHover,
   type LiteAreaOptions,
   type LiteAreaSizing,
+  type LiteAreaSticky,
 } from './editor.js'
 
 export { createEditor } from './create.js'
@@ -31,9 +32,13 @@ export {
 
 export { TextMirror, type CaretBox } from './mirror.js'
 
+export { Ghost, type GhostAnchor } from './ghost.js'
+
 export { Overlay, type OverlayClassNames } from './overlay.js'
 
 export { Popup, type AnchorBox, type PopupHandlers } from './popup.js'
+
+export { StickyHeaders, type StickyRenderInput } from './sticky.js'
 
 export { Tooltip, type TooltipAnchor } from './tooltip.js'
 
