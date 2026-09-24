@@ -6,6 +6,17 @@ A Vite playground for typing into the real component:
 npm run demo
 ```
 
+Two pages are served by that one command:
+
+| Page | What it is |
+| --- | --- |
+| `/` | The React demo: two panels, a toolbar, and panels beside each editor that show the text, the diagnostics, and the completion the editor reported |
+| `/showcase.html` | A standalone vanilla page for three features — sticky block headers, the inline completion preview, and the typing aids. One file, `showcase.ts`, mounting `createEditor` three times with a grammar each |
+
+The showcase is deliberately not a React app: the engine and the DOM layer are the
+library, and the React binding is optional. `showcase.ts` is also the shortest complete
+example of a host in the repository — three grammars of a dozen lines each.
+
 ## The grammars here are the demo's own
 
 `@citisen/litearea` ships no syntax. Every panel below is the same React component

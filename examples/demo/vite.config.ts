@@ -23,5 +23,15 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
+    // Two pages, so a built demo is the same demo as the served one: the React app at
+    // `/` and the vanilla showcase at `/showcase.html`. Without this, `vite build` would
+    // silently emit only `index.html` and the showcase would exist for `npm run demo`
+    // alone.
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('index.html', import.meta.url)),
+        showcase: fileURLToPath(new URL('showcase.html', import.meta.url)),
+      },
+    },
   },
 })

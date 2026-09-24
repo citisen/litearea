@@ -1,0 +1,125 @@
+/* ─── the showcase's own page styles ─────────────────────────────────────────
+ *
+ * The editor injects its own stylesheet on construction, so nothing here styles the
+ * editor itself. What is here is the page around it, plus a few custom properties —
+ * which is the theming mechanism the library documents, used the way a host would use
+ * it rather than by reaching into its classes.
+ *
+ * The one custom property this page deliberately does NOT touch is `--litearea-bg`:
+ * a pinned header row is painted with it, so overriding the background anywhere else
+ * would leave the pinned row a different colour from the box it sits in.
+ */
+
+:root {
+  color-scheme: light dark;
+  --page-bg: #f6f7f9;
+  --page-fg: #1f2328;
+  --page-dim: #6b7280;
+  --page-line: #d8dbe0;
+  --page-card: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #14161a;
+    --page-fg: #e6e8ec;
+    --page-dim: #9aa1ac;
+    --page-line: #2c313a;
+    --page-card: #1b1e24;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 32px 24px 64px;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+#showcase {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+header h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+header p {
+  margin: 0;
+  color: var(--page-dim);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+section h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.blurb {
+  margin: 0;
+  color: var(--page-fg);
+}
+
+.tries {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--page-dim);
+}
+
+.tries li {
+  margin: 2px 0;
+}
+
+.binding {
+  /* The editor's own box sets its border and radius; this only gives it room. */
+  margin-top: 4px;
+  /* The page states its own typography for the editor through custom properties
+     rather than by styling its classes. */
+  --litearea-font: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --litearea-font-size: 13px;
+  --litearea-line-height: 20px;
+  --litearea-radius: 10px;
+  --litearea-accent: #4d6bfe;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--page-dim);
+  font-size: 13px;
+}
+
+code {
+  padding: 1px 5px;
+  border: 1px solid var(--page-line);
+  border-radius: 5px;
+  background: var(--page-card);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--page-line);
+  color: var(--page-dim);
+  font-size: 13px;
+}

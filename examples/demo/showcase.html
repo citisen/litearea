@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>litearea — the three newest features</title>
+    <!--
+      A second, standalone page beside the React demo, served by the same dev server:
+      `npm run demo` and then open /showcase.html.
+
+      It is deliberately not a React app. It mounts the vanilla `createEditor` three
+      times, which is also the point being made: the React binding is optional and the
+      engine is the library.
+
+      The editor injects its own stylesheet when the first one is constructed, so there
+      is no stylesheet import for the library here — `showcase.css` only lays the page
+      out around it.
+    -->
+  </head>
+  <body>
+    <main id="showcase"></main>
+    <script type="module" src="./showcase.ts"></script>
+  </body>
+</html>
