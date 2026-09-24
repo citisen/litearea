@@ -254,3 +254,35 @@ commit is the only copy of the built library that will ever exist, so the
 be right by installing what was actually published. A path promised in
 `package.json` but never written by the build is invisible locally and fatal
 remotely.
+
+## Where the signing key lives
+
+The workflow is deliberately two jobs:
+
+- **`build`** holds `contents: read` and nothing else. It runs `npm ci
+  --ignore-scripts`, this repository's own checks, and `verify-release.mjs`,
+  which packs the tarball once and prints its sha512 into the run summary. It
+  has no `id-token`, and the gate fails outright if OIDC ever shows up there.
+- **`stage`** is the only job with `id-token: write`, and it runs no repository
+  code at all: no checkout, no `npm ci`, no cache, no build step. It re-hashes
+  the tarball the build job produced, refuses anything that does not match, and
+  uploads exactly those bytes.
+
+That split is the point of the May 2026 TanStack / "Mini Shai-Hulud"
+compromise: the attacker never stole an npm token. They got code to execute
+inside the job that could mint one, and published under the project's own
+trusted-publisher identity, attestations and all. Keeping the signing capability
+in a job that executes no third-party code removes that path, and `npm-publish`
+requires a human approval before the staging job starts — so no OIDC token
+exists until a person clicks.
+
+Approving is the last mile, and a stage-id alone does not say *what* is in the
+queue. Copy the integrity out of the run summary and pass it, so that the
+approval is checked rather than assumed:
+
+```sh
+npm run release -- approve <stage-id> --expect sha512-…
+```
+
+Without `--expect` the command still works, but it warns that it could not
+compare the staged bytes against the ones CI built.
