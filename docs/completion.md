@@ -232,8 +232,8 @@ not display. The matched offsets are only meaningful against the label, so a row
 that matched on different text is ranked without an emphasis rather than with the
 wrong one. `highlightSegments(label, indices)` is exported for the caller that
 builds the row: it returns alternating plain and matched pieces rather than
-markup, because the caller is building DOM nodes, not HTML, and a font family
-called `<b>` must be shown as `<b>`.
+markup, because the caller is building DOM nodes, not HTML, and a label that says
+`<b>` has to reach the reader as a literal `<b>`, not as a bold word.
 
 `rank(items, needle, options)` is the exported entry point (`options` is
 `label`, `filterText?`, `sortText?`), and `fuzzyMatch(needle, label)` returns the

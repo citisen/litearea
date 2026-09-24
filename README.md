@@ -746,7 +746,8 @@ change colour, background, and `text-decoration`, and nothing that moves a glyph
   `editor.redo()` are thin wrappers over it that report only whether the call was
   possible.
 - **Hover tooltips and the documentation panel are plain text.** There is no
-  markdown rendering and no HTML: a font family called `<b>` is shown as `<b>`.
+  markdown rendering and no HTML: text that says `<b>` reaches the reader as a
+  literal `<b>`, not as a bold word.
 - **There is no `'commit'` completion trigger.** A commit character accepts the row,
   writes the character and closes the list; whatever is typed next is an ordinary
   `'auto'` trigger. `CompletionTrigger` is `'auto' | 'explicit'`.

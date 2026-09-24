@@ -495,8 +495,8 @@ describe: (context) => HoverInfo | null | undefined
 ```
 
 `HoverInfo` is `{ title?, detail?, body?, range?, kind? }`, all plain text. There
-is no markdown rendering and no HTML: a font family called `<b>` is shown as
-`<b>`.
+is no markdown rendering and no HTML: text that says `<b>` reaches the reader as a
+literal `<b>`, not as a bold word.
 
 `resolveHover(inspection, grammar, offset)` resolves one offset, and the
 precedence is fixed:

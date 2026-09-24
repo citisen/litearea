@@ -13,8 +13,8 @@ is a decision that was made deliberately; the ones that are not decisions are ma
   `editor.redo()` report only whether the call was possible.
 - **No grammar.** No built-in language, no language identifier, no bundled tokenizer, and no
   grammar entry point. A caller supplies the rules.
-- **No Markdown and no HTML** in hover tooltips or the documentation panel. A font family called
-  `<b>` is shown as `<b>`.
+- **No Markdown and no HTML** in hover tooltips or the documentation panel. Text that says
+  `<b>` reaches the reader as a literal `<b>`, not as a bold word.
 
 ## Where the platform decides
 
